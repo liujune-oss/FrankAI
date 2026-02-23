@@ -549,7 +549,7 @@ export default function ChatPage() {
         {/* New Chat button */}
         <button
           onClick={handleNewChat}
-          className="mx-3 mt-3 flex items-center space-x-2 px-3 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          className="mx-3 mt-3 flex items-center space-x-2 px-3 py-2.5 rounded-xl bg-muted text-foreground text-sm font-medium hover:bg-muted/70 transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
           <span>新建会话</span>
@@ -560,8 +560,8 @@ export default function ChatPage() {
           {conversations.map((conv) => (
             <div
               key={conv.id}
-              className={`group flex items-center rounded-xl px-3 py-2.5 cursor-pointer transition-colors ${activeConv?.id === conv.id
-                ? "bg-primary/10 text-primary"
+              className={`flex items-center rounded-xl px-3 py-2.5 cursor-pointer transition-colors ${activeConv?.id === conv.id
+                ? "bg-foreground/10 text-foreground font-semibold"
                 : "hover:bg-muted text-foreground"
                 }`}
               onClick={() => handleSwitchConversation(conv)}
@@ -580,9 +580,11 @@ export default function ChatPage() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDeleteConversation(conv.id);
+                  if (confirm('确定要删除这个会话吗？')) {
+                    handleDeleteConversation(conv.id);
+                  }
                 }}
-                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-all ml-1"
+                className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground/50 hover:text-red-500 transition-all ml-1 flex-shrink-0"
                 title="删除"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
