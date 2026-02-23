@@ -19,6 +19,7 @@ import {
 
 interface ChatMessage extends UIMessage {
   thinking?: string;
+  images?: { data: string; mimeType: string }[];
 }
 
 export default function ChatPage() {
@@ -38,6 +39,22 @@ export default function ChatPage() {
   const [thinkingText, setThinkingText] = useState("");
   const [error, setError] = useState<Error | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingImages, setPendingImages] = useState<{ data: string; mimeType: string }[]>([]);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(',')[1];
+        setPendingImages((prev) => [...prev, { data: base64, mimeType: file.type }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
 
   // ── Initialization ────────────────────────────────────
   useEffect(() => {
@@ -162,18 +179,30 @@ export default function ChatPage() {
     setThinkingText("");
   }, []);
 
+  // ── Detect image generation request ────────────────────
+  const isImageGenRequest = (text: string): boolean => {
+    const keywords = ['画', '绘', '生成图', '制作图', '创作图', '设计图', '做一张图', '做一幅', '做个图',
+      'draw', 'paint', 'generate image', 'create image', 'make image', 'sketch', 'illustrate', 'design a'];
+    const lower = text.toLowerCase();
+    return keywords.some((k) => lower.includes(k));
+  };
+
   // ── Send message ──────────────────────────────────────
   const sendMessage = async (text: string) => {
-    if (!text.trim() || isLoading) return;
+    if ((!text.trim() && pendingImages.length === 0) || isLoading) return;
     setIsLoading(true);
     setIsThinking(true);
     setThinkingText("");
     setError(null);
 
+    const currentImages = [...pendingImages];
+    setPendingImages([]);
+
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
       parts: [{ type: "text", text }],
+      images: currentImages.length > 0 ? currentImages : undefined,
     };
 
     const newMessages = [...messages, userMessage];
@@ -184,118 +213,167 @@ export default function ChatPage() {
     abortControllerRef.current = controller;
 
     try {
-      const coreMessages = newMessages.map((m) => ({
-        role: m.role,
-        content:
-          m.parts
-            ?.map((p: any) => p.text)
-            .filter(Boolean)
-            .join("\n") || "",
-      }));
+      // Check if this is an image generation request
+      const shouldGenImage = isImageGenRequest(text) && currentImages.length === 0;
 
-      const response = await fetch(`/api/chat?model=${model}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: coreMessages }),
-        signal: controller.signal,
-      });
+      if (shouldGenImage) {
+        // ── Image generation path (non-streaming) ──
+        setThinkingText("正在用 Nano Banana 生成图片...");
 
-      if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+        // Build history for context
+        const history = newMessages.slice(0, -1).map((m: ChatMessage) => ({
+          role: m.role,
+          text: m.parts?.map((p: any) => p.text).filter(Boolean).join("\n") || "",
+          images: m.images,
+        }));
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) throw new Error("No response body");
+        const response = await fetch('/api/generate-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: text, history }),
+          signal: controller.signal,
+        });
 
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        parts: [{ type: "text", text: "" }],
-        thinking: "",
-      };
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP Error: ${response.status}`);
+        }
 
-      const withAssistant = [...newMessages, assistantMessage];
-      setMessages(withAssistant);
+        const data = await response.json();
+        setIsThinking(false);
 
-      let done = false;
-      let streamedContent = "";
-      let thinkingContent = "";
-      let hasStartedText = false;
+        // Build assistant message with images
+        const textParts = data.parts?.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n') || '';
+        const imageParts = data.parts?.filter((p: any) => p.type === 'image') || [];
 
-      while (!done) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
-        if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            if (line.startsWith("data: ")) {
-              const raw = line.substring(6);
-              if (raw === "[DONE]") continue;
-              try {
-                const payload = JSON.parse(raw);
-                if (payload.type === "text-delta") {
+        const assistantMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          parts: [{ type: "text", text: textParts }],
+          images: imageParts.map((p: any) => ({ data: p.data, mimeType: p.mimeType })),
+        };
+
+        const finalMessages = [...newMessages, assistantMessage];
+        setMessages(finalMessages);
+        await saveMessages(finalMessages);
+
+      } else {
+        // ── Regular streaming chat path ──
+        const coreMessages = newMessages.map((m: ChatMessage) => {
+          const contentParts: any[] = [];
+          const textContent = m.parts?.map((p: any) => p.text).filter(Boolean).join("\n") || "";
+          if (textContent) contentParts.push({ type: 'text', text: textContent });
+          if (m.images) {
+            m.images.forEach((img) => {
+              contentParts.push({ type: 'image', image: img.data, mimeType: img.mimeType });
+            });
+          }
+          return { role: m.role, content: contentParts.length > 0 ? contentParts : textContent };
+        });
+
+        const response = await fetch(`/api/chat?model=${model}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: coreMessages }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        if (!reader) throw new Error("No response body");
+
+        const assistantMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          parts: [{ type: "text", text: "" }],
+          thinking: "",
+        };
+
+        const withAssistant = [...newMessages, assistantMessage];
+        setMessages(withAssistant);
+
+        let done = false;
+        let streamedContent = "";
+        let thinkingContent = "";
+        let hasStartedText = false;
+
+        while (!done) {
+          const { value, done: doneReading } = await reader.read();
+          done = doneReading;
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split("\n");
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              if (line.startsWith("data: ")) {
+                const raw = line.substring(6);
+                if (raw === "[DONE]") continue;
+                try {
+                  const payload = JSON.parse(raw);
+                  if (payload.type === "text-delta") {
+                    if (!hasStartedText) {
+                      hasStartedText = true;
+                      setIsThinking(false);
+                    }
+                    streamedContent += payload.delta;
+                  } else if (
+                    payload.type === "reasoning" ||
+                    payload.type === "reasoning-delta"
+                  ) {
+                    thinkingContent += payload.delta || payload.text || "";
+                    setThinkingText(thinkingContent);
+                  } else if (payload.errorText) {
+                    throw new Error(payload.errorText);
+                  }
+                } catch (e: any) {
+                  if (
+                    e?.message?.startsWith("HTTP") ||
+                    e?.message?.includes("error")
+                  )
+                    throw e;
+                }
+              } else if (line.startsWith("0:")) {
+                try {
+                  const delta = JSON.parse(line.substring(2));
                   if (!hasStartedText) {
                     hasStartedText = true;
                     setIsThinking(false);
                   }
-                  streamedContent += payload.delta;
-                } else if (
-                  payload.type === "reasoning" ||
-                  payload.type === "reasoning-delta"
-                ) {
-                  thinkingContent += payload.delta || payload.text || "";
-                  setThinkingText(thinkingContent);
-                } else if (payload.errorText) {
-                  throw new Error(payload.errorText);
-                }
-              } catch (e: any) {
-                if (
-                  e?.message?.startsWith("HTTP") ||
-                  e?.message?.includes("error")
-                )
-                  throw e;
+                  streamedContent += delta;
+                } catch (e) { }
               }
-            } else if (line.startsWith("0:")) {
-              try {
-                const delta = JSON.parse(line.substring(2));
-                if (!hasStartedText) {
-                  hasStartedText = true;
-                  setIsThinking(false);
-                }
-                streamedContent += delta;
-              } catch (e) { }
             }
+
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = { ...updated[updated.length - 1] } as ChatMessage;
+              if (last.role === "assistant") {
+                last.parts = [{ type: "text", text: streamedContent }];
+                last.thinking = thinkingContent;
+              }
+              updated[updated.length - 1] = last;
+              return updated;
+            });
           }
-
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = { ...updated[updated.length - 1] } as ChatMessage;
-            if (last.role === "assistant") {
-              last.parts = [{ type: "text", text: streamedContent }];
-              last.thinking = thinkingContent;
-            }
-            updated[updated.length - 1] = last;
-            return updated;
-          });
         }
-      }
 
-      // Save final messages
-      const finalMessages = [...newMessages];
-      const finalAssistant: ChatMessage = {
-        id: assistantMessage.id,
-        role: "assistant",
-        parts: [{ type: "text", text: streamedContent }],
-        thinking: thinkingContent,
-      };
-      finalMessages.push(finalAssistant);
-      await saveMessages(finalMessages);
+        // Save final messages
+        const finalMessages = [...newMessages];
+        const finalAssistant: ChatMessage = {
+          id: assistantMessage.id,
+          role: "assistant",
+          parts: [{ type: "text", text: streamedContent }],
+          thinking: thinkingContent,
+        };
+        finalMessages.push(finalAssistant);
+        await saveMessages(finalMessages);
+      }
     } catch (err: any) {
       if (err.name !== "AbortError") {
         setError(err);
       }
-      // Save partial messages even on error
       await saveMessages(newMessages);
     } finally {
       setIsLoading(false);
@@ -358,31 +436,6 @@ export default function ChatPage() {
           <span>新建会话</span>
         </button>
 
-        {/* Model selector */}
-        <div className="mx-3 mt-2">
-          <select
-            className="w-full bg-muted/50 border border-input rounded-xl text-sm px-3 py-2 outline-none text-foreground"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            disabled={isLoading}
-          >
-            <optgroup label="Gemini 3.x">
-              <option value="gemini-3.1-pro-preview">3.1 Pro Preview</option>
-              <option value="gemini-3-pro-preview">3.0 Pro Preview</option>
-              <option value="gemini-3-flash-preview">3.0 Flash Preview</option>
-            </optgroup>
-            <optgroup label="Gemini 2.5">
-              <option value="gemini-2.5-pro">2.5 Pro</option>
-              <option value="gemini-2.5-flash">2.5 Flash</option>
-              <option value="gemini-2.5-flash-lite">2.5 Flash Lite</option>
-            </optgroup>
-            <optgroup label="Gemini 2.0">
-              <option value="gemini-2.0-flash">2.0 Flash</option>
-              <option value="gemini-2.0-flash-lite">2.0 Flash Lite</option>
-            </optgroup>
-          </select>
-        </div>
-
         {/* Conversation list */}
         <div className="flex-1 overflow-y-auto mt-2 px-2 space-y-1">
           {conversations.map((conv) => (
@@ -437,14 +490,16 @@ export default function ChatPage() {
         {/* Left: hamburger */}
         <button
           onClick={() => setDrawerOpen(true)}
-          className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+          className="p-1.5 rounded-lg hover:bg-muted transition-colors flex-shrink-0"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="18" y2="18" /></svg>
         </button>
-        {/* Center: title */}
-        <h1 className="text-lg font-semibold tracking-tight">Gemini</h1>
+        {/* Center: conversation title */}
+        <h1 className="text-base font-semibold tracking-tight truncate mx-3 flex-1 text-center">
+          {activeConv?.title === "新会话" ? "Gemini" : activeConv?.title || "Gemini"}
+        </h1>
         {/* Right: status dot */}
-        <div className="p-1.5">
+        <div className="p-1.5 flex-shrink-0">
           <span className="relative flex h-3 w-3">
             <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isLoading ? 'bg-amber-400' : 'bg-green-400'}`}></span>
             <span className={`relative inline-flex rounded-full h-3 w-3 ${isLoading ? 'bg-amber-500' : 'bg-green-500'}`}></span>
@@ -485,9 +540,24 @@ export default function ChatPage() {
                     </details>
                   </div>
                 )}
+                {/* User-uploaded images */}
+                {m.images && m.images.length > 0 && (
+                  <div className={`flex w-full ${m.role === "user" ? "justify-end" : "justify-start"} mb-1`}>
+                    <div className="flex flex-wrap gap-2 max-w-[85%]">
+                      {m.images.map((img, idx) => (
+                        <img
+                          key={idx}
+                          src={`data:${img.mimeType};base64,${img.data}`}
+                          alt="uploaded"
+                          className="rounded-xl max-h-48 max-w-[200px] object-cover border"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className={`flex w-full ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div
-                    className={`flex max-w-[85%] rounded-2xl px-4 py-2 text-[15px] leading-relaxed break-words ${m.role === "user"
+                    className={`flex flex-col max-w-[85%] rounded-2xl px-4 py-2 text-[15px] leading-relaxed break-words ${m.role === "user"
                       ? "bg-primary text-primary-foreground rounded-tr-sm"
                       : "bg-muted text-foreground rounded-tl-sm border"
                       }`}
@@ -554,29 +624,105 @@ export default function ChatPage() {
 
       {/* ── Input Area (Gemini-style) ── */}
       <div className="flex-none px-3 pt-2 pb-3 bg-background">
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleImageUpload}
+        />
+
+        {/* Pending image preview */}
+        {pendingImages.length > 0 && (
+          <div className="flex gap-2 px-2 pb-2 overflow-x-auto">
+            {pendingImages.map((img, idx) => (
+              <div key={idx} className="relative flex-shrink-0">
+                <img
+                  src={`data:${img.mimeType};base64,${img.data}`}
+                  alt="pending"
+                  className="h-16 w-16 rounded-xl object-cover border"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPendingImages((prev) => prev.filter((_, i) => i !== idx))}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
             if (isLoading) { stopGeneration(); return; }
-            if (!input.trim()) return;
+            if (!input.trim() && pendingImages.length === 0) return;
             sendMessage(input);
           }}
           className="bg-muted/60 border border-input rounded-3xl overflow-hidden transition-all focus-within:border-primary/50 focus-within:bg-muted/80"
         >
-          {/* Text input */}
-          <input
-            className="w-full bg-transparent px-5 pt-3.5 pb-2 outline-none text-base placeholder:text-muted-foreground/60"
+          {/* Text input - auto-expanding textarea */}
+          <textarea
+            className="w-full bg-transparent px-5 pt-3.5 pb-2 outline-none text-base placeholder:text-muted-foreground/60 resize-none overflow-hidden"
             value={input}
             placeholder="问问 Gemini"
-            onChange={(e) => setInput(e.target.value)}
+            rows={1}
+            style={{ maxHeight: '200px', overflowY: input.split('\n').length > 6 ? 'auto' : 'hidden' }}
+            onChange={(e) => {
+              setInput(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (isLoading) { stopGeneration(); return; }
+                if (!input.trim() && pendingImages.length === 0) return;
+                sendMessage(input);
+                (e.target as HTMLTextAreaElement).style.height = 'auto';
+              }
+            }}
           />
           {/* Bottom toolbar */}
           <div className="flex items-center justify-between px-3 pb-2.5">
-            <div className="flex items-center space-x-1">
-              {/* Model badge */}
-              <span className="inline-flex items-center text-[11px] text-muted-foreground bg-background/80 border border-input rounded-full px-2.5 py-0.5">
-                {model.replace('gemini-', '').replace('-preview', '')}
-              </span>
+            <div className="flex items-center space-x-1.5">
+              {/* Image upload button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="p-1.5 rounded-full hover:bg-background/80 text-muted-foreground hover:text-foreground transition-colors"
+                title="上传图片"
+                disabled={isLoading}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
+              </button>
+              {/* Model selector badge */}
+              <select
+                className="appearance-none cursor-pointer text-[11px] text-muted-foreground bg-background/80 border border-input rounded-full pl-2.5 pr-5 py-0.5 outline-none hover:bg-muted transition-colors"
+                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center' }}
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                disabled={isLoading}
+              >
+                <optgroup label="Gemini 3.x">
+                  <option value="gemini-3.1-pro-preview">3.1 Pro</option>
+                  <option value="gemini-3-pro-preview">3.0 Pro</option>
+                  <option value="gemini-3-flash-preview">3.0 Flash</option>
+                </optgroup>
+                <optgroup label="Gemini 2.5">
+                  <option value="gemini-2.5-pro">2.5 Pro</option>
+                  <option value="gemini-2.5-flash">2.5 Flash</option>
+                  <option value="gemini-2.5-flash-lite">2.5 Flash Lite</option>
+                </optgroup>
+                <optgroup label="Gemini 2.0">
+                  <option value="gemini-2.0-flash">2.0 Flash</option>
+                  <option value="gemini-2.0-flash-lite">2.0 Flash Lite</option>
+                </optgroup>
+              </select>
               {/* Status indicator */}
               {isLoading && (
                 <span className="inline-flex items-center space-x-1 text-[11px] text-amber-500 px-1">
@@ -598,7 +744,7 @@ export default function ChatPage() {
                 </button>
               ) : (
                 <button
-                  disabled={!input.trim()}
+                  disabled={!input.trim() && pendingImages.length === 0}
                   type="submit"
                   className="p-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
@@ -612,3 +758,4 @@ export default function ChatPage() {
     </main>
   );
 }
+

@@ -10,9 +10,29 @@ export async function POST(req: Request) {
         const url = new URL(req.url);
         const model = url.searchParams.get('model') || 'gemini-3.1-pro-preview';
 
+        // Convert messages: map image parts for the AI SDK format
+        const processedMessages = messages.map((msg: any) => {
+            if (Array.isArray(msg.content)) {
+                return {
+                    role: msg.role,
+                    content: msg.content.map((part: any) => {
+                        if (part.type === 'image') {
+                            return {
+                                type: 'image' as const,
+                                image: part.image, // base64 data
+                                mimeType: part.mimeType || 'image/jpeg',
+                            };
+                        }
+                        return part;
+                    }),
+                };
+            }
+            return msg;
+        });
+
         const result = streamText({
             model: google(model),
-            messages,
+            messages: processedMessages,
             tools: {
                 google_search: google.tools.googleSearch({}),
             },
