@@ -16,6 +16,7 @@ import {
   setActiveConversationId,
   autoTitle,
 } from "@/lib/conversations";
+import versionData from "../../version.json";
 
 interface ChatMessage extends UIMessage {
   thinking?: string;
@@ -483,6 +484,13 @@ export default function ChatPage() {
             </button>
           </div>
         )}
+
+        {/* Version */}
+        <div className="px-3 py-2 border-t">
+          <p className="text-[10px] text-muted-foreground/50 text-center">
+            v{versionData.major}.{versionData.minor}.{versionData.build}
+          </p>
+        </div>
       </div>
 
       {/* ── Header ── */}
