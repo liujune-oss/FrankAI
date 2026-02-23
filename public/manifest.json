@@ -19,5 +19,12 @@
       "type": "image/png",
       "purpose": "any"
     }
+  ],
+  "prefer_related_applications": true,
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://nonexistent.com"
+    }
   ]
 }
