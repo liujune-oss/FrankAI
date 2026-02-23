@@ -1,10 +1,17 @@
 import { google } from '@ai-sdk/google';
 import { streamText } from 'ai';
+import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
 
 // Allow streaming responses up to 120 seconds (Pro models think longer)
 export const maxDuration = 120;
 
 export async function POST(req: Request) {
+    // Auth check
+    const { token, fingerprint } = getAuthFromHeaders(req);
+    if (!await verifyToken(token, fingerprint)) {
+        return new Response('Unauthorized', { status: 401 });
+    }
+
     try {
         const { messages } = await req.json();
         const url = new URL(req.url);

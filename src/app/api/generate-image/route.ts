@@ -1,10 +1,17 @@
 import { GoogleGenAI } from '@google/genai';
+import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
 
 export const maxDuration = 120;
 
 const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! });
 
 export async function POST(req: Request) {
+    // Auth check
+    const { token, fingerprint } = getAuthFromHeaders(req);
+    if (!await verifyToken(token, fingerprint)) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     try {
         const { prompt, history } = await req.json();
 
