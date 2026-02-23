@@ -10,11 +10,22 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-    // Pass through all network requests but satisfy the PWA fetch handler requirement
+    // Ignored requests for faster passthrough
+    if (
+        event.request.method !== 'GET' ||
+        event.request.url.includes('/api/') ||
+        event.request.url.includes('chrome-extension://') ||
+        event.request.url.includes('_next/')
+    ) {
+        return;
+    }
+
+    // Network-first strategy for everything else
     event.respondWith(
         fetch(event.request).catch(() => {
-            // Fallback for offline (optional, but good for installability score)
+            // Return a basic offline response instead of crashing
             return new Response('Offline Mode', {
+                headers: { 'Content-Type': 'text/plain' },
                 status: 503,
                 statusText: 'Service Unavailable'
             });
