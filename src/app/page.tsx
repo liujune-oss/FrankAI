@@ -26,7 +26,7 @@ interface ChatMessage extends UIMessage {
 export default function ChatPage() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [input, setInput] = useState("");
-  const [model, setModel] = useState("gemini-3.1-pro-preview");
+  const [model, setModel] = useState("gemini-3-flash-preview");
 
   // Conversation state
   const [conversations, setConversations] = useState<Conversation[]>([]);
