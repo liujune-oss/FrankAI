@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     }
 
     try {
-        const { messages } = await req.json();
+        const { messages, systemInstruction } = await req.json();
         const url = new URL(req.url);
         const model = url.searchParams.get('model') || 'gemini-3.1-pro-preview';
 
@@ -39,6 +39,7 @@ export async function POST(req: Request) {
 
         const result = streamText({
             model: google(model),
+            system: systemInstruction || undefined,
             messages: processedMessages,
             tools: {
                 google_search: google.tools.googleSearch({}),

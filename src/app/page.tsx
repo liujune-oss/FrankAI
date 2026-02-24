@@ -33,6 +33,11 @@ export default function ChatPage() {
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [showSystemInstruction, setShowSystemInstruction] = useState(false);
+
+  // System instruction
+  const DEFAULT_SYSTEM_INSTRUCTION = "你是一个真诚、有深度的AI助手。请遵循以下原则：\n1. 拒绝顺从陷阱：不要为了讨好用户而无条件赞同。如果用户的观点有问题，礼貌但直接地指出。\n2. 多角度分析：对任何问题提供多个视角的观点，包括正面、反面和潜在的灰色地带。\n3. 诚实表达不确定性：当你不确定某件事时，明确说明而不是编造答案。\n4. 鼓励批判性思维：引导用户自行思考，而不是盲目接受你的回答。\n5. 用中文回复，除非用户使用其他语言提问。";
+  const [systemInstruction, setSystemInstruction] = useState(DEFAULT_SYSTEM_INSTRUCTION);
 
   // Streaming state
   const [isLoading, setIsLoading] = useState(false);
@@ -87,6 +92,11 @@ export default function ChatPage() {
     const token = localStorage.getItem('activation-token');
     if (token) {
       setIsActivated(true);
+    }
+    // Load saved system instruction
+    const savedInstruction = localStorage.getItem('system-instruction');
+    if (savedInstruction !== null) {
+      setSystemInstruction(savedInstruction);
     }
     setCheckingAuth(false);
   }, []);
@@ -346,7 +356,7 @@ export default function ChatPage() {
         const response = await fetch(`/api/chat?model=${model}`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-          body: JSON.stringify({ messages: coreMessages }),
+          body: JSON.stringify({ messages: coreMessages, systemInstruction: systemInstruction.trim() || undefined }),
           signal: controller.signal,
         });
 
@@ -615,6 +625,42 @@ export default function ChatPage() {
               </button>
             </div>
           ))}
+        </div>
+
+        {/* System Instruction */}
+        <div className="px-3 py-2 border-t">
+          <button
+            onClick={() => setShowSystemInstruction(!showSystemInstruction)}
+            className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground py-1.5 transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
+              系统指令
+            </span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${showSystemInstruction ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6" /></svg>
+          </button>
+          {showSystemInstruction && (
+            <div className="mt-2 space-y-2">
+              <textarea
+                value={systemInstruction}
+                onChange={(e) => {
+                  setSystemInstruction(e.target.value);
+                  localStorage.setItem('system-instruction', e.target.value);
+                }}
+                className="w-full h-32 text-xs bg-muted/50 border rounded-lg p-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground placeholder:text-muted-foreground"
+                placeholder="输入系统指令..."
+              />
+              <button
+                onClick={() => {
+                  setSystemInstruction(DEFAULT_SYSTEM_INSTRUCTION);
+                  localStorage.setItem('system-instruction', DEFAULT_SYSTEM_INSTRUCTION);
+                }}
+                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                恢复默认
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Clear all */}
