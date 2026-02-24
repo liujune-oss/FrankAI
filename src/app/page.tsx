@@ -262,10 +262,18 @@ export default function ChatPage() {
 
   // ── Detect image generation request ────────────────────
   const isImageGenRequest = (text: string): boolean => {
-    const keywords = ['画', '绘', '生成图', '制作图', '创作图', '设计图', '做一张图', '做一幅', '做个图',
-      'draw', 'paint', 'generate image', 'create image', 'make image', 'sketch', 'illustrate', 'design a'];
     const lower = text.toLowerCase();
-    return keywords.some((k) => lower.includes(k));
+    // Direct match keywords (short common phrases)
+    const directKeywords = ['画一', '画个', '画张', '画幅', '绘制', '作画', '做一张图', '做个图', '做一幅',
+      'draw ', 'paint ', 'sketch ', 'illustrate '];
+    if (directKeywords.some((k) => lower.includes(k))) return true;
+    // Smart match: text contains BOTH a generation verb AND an image noun
+    const genVerbs = ['生成', '创建', '创作', '制作', '设计', '做', 'generate', 'create', 'make', 'design'];
+    const imageNouns = ['图', '图片', '图像', '照片', '插画', '插图', '海报', '壁纸', '头像', '封面',
+      'image', 'picture', 'photo', 'poster', 'wallpaper', 'avatar', 'icon', 'illustration'];
+    const hasVerb = genVerbs.some((v) => lower.includes(v));
+    const hasNoun = imageNouns.some((n) => lower.includes(n));
+    return hasVerb && hasNoun;
   };
 
   // ── Send message ──────────────────────────────────────
