@@ -471,7 +471,7 @@ export default function ChatPage() {
     const el = chatContainerRef.current;
     if (!el) return;
     // If user is within 80px of the bottom, consider them "at bottom"
-    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     userHasScrolledUp.current = !isNearBottom;
   }, []);
 
