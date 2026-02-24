@@ -307,7 +307,9 @@ export default function ChatPage() {
       // Also auto-route to image gen if the last assistant message had images (follow-up edit)
       const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
       const lastMsgHadImages = lastAssistantMsg?.images && lastAssistantMsg.images.length > 0;
-      const shouldGenImage = (isImageGenRequest(text) || lastMsgHadImages) && currentImages.length === 0;
+      // Exit image mode: explicit commands or clearly non-image requests
+      const exitImageMode = /^(文字模式|退出图片|\/text|\/chat)/i.test(text.trim());
+      const shouldGenImage = !exitImageMode && (isImageGenRequest(text) || !!lastMsgHadImages) && currentImages.length === 0;
 
       if (shouldGenImage) {
         // ── Image generation path (non-streaming) ──
