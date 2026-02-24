@@ -1,5 +1,13 @@
 # Gemini Chat — 发布记录
 
+## v1.4.0 — 2026-02-24
+- 重构：将 page.tsx（~990行）拆分为 5 个独立组件和 3 个自定义 Hooks
+  - 组件：ActivationGate、ChatHeader、ConversationDrawer、MessageList、InputBar
+  - Hooks：useAuth、useConversations、useChatStream
+  - 主页面缩减至 ~100 行组合层
+- 新增 `src/types/chat.ts` 共享类型定义
+- 功能无变化，纯结构优化
+
 ## v1.3.3 — 2026-02-24
 - 主题色跟随系统深色/浅色模式切换
 - themeColor meta 标签适配双主题

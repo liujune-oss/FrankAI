@@ -47,4 +47,4 @@ Gemini Chat 是一个由 Google Gemini 驱动的私人 AI 聊天助手，以 PWA
 
 ## 当前版本
 
-**v1.3.3**
+**v1.4.0**

@@ -66,8 +66,8 @@
 - 自动标题：取用户首条消息前 30 字符
 - 键前缀：`conv-{id}`，活跃会话键：`active-conversation-id`
 
-### 5. 前端 UI (`page.tsx`)
-- 单文件组件，约 970 行
+### 5. 前端 UI (`page.tsx` + 组件)
+- 主页面约 100 行，作为组合层调用独立组件和 Hooks
 - 激活门：未激活时显示激活码输入界面
 - 侧栏抽屉：会话列表 + 系统指令编辑 + 清空按钮
 - 消息气泡：用户靠右，AI 靠左；AI 消息支持 Markdown 渲染
@@ -95,13 +95,25 @@
 gemini-chat-pwa/
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx              # 主页面（聊天 UI）
+│   │   ├── page.tsx              # 主页面（组合层，~100行）
 │   │   ├── layout.tsx            # 根布局（主题、PWA）
 │   │   ├── globals.css           # 全局样式 + 深色主题
 │   │   └── api/
 │   │       ├── chat/route.ts     # 流式聊天 API
 │   │       ├── activate/route.ts # 激活码验证 API
 │   │       └── generate-image/route.ts  # AI 图片生成 API
+│   ├── components/
+│   │   ├── ActivationGate.tsx    # 激活码输入界面
+│   │   ├── ChatHeader.tsx        # 顶栏（菜单+标题+状态）
+│   │   ├── ConversationDrawer.tsx # 会话列表抽屉
+│   │   ├── MessageList.tsx       # 消息列表+滚动+Markdown
+│   │   └── InputBar.tsx          # 输入框+工具栏+模型选择
+│   ├── hooks/
+│   │   ├── useAuth.ts            # 激活鉴权 Hook
+│   │   ├── useConversations.ts   # 会话管理 Hook
+│   │   └── useChatStream.ts      # 聊天流+图片生成 Hook
+│   ├── types/
+│   │   └── chat.ts               # 共享类型定义
 │   └── lib/
 │       ├── auth.ts               # JWT 鉴权工具
 │       ├── conversations.ts      # IndexedDB 会话管理
