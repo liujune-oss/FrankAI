@@ -304,7 +304,10 @@ export default function ChatPage() {
 
     try {
       // Check if this is an image generation request
-      const shouldGenImage = isImageGenRequest(text) && currentImages.length === 0;
+      // Also auto-route to image gen if the last assistant message had images (follow-up edit)
+      const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
+      const lastMsgHadImages = lastAssistantMsg?.images && lastAssistantMsg.images.length > 0;
+      const shouldGenImage = (isImageGenRequest(text) || lastMsgHadImages) && currentImages.length === 0;
 
       if (shouldGenImage) {
         // ── Image generation path (non-streaming) ──
