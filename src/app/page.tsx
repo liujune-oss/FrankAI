@@ -265,6 +265,7 @@ export default function ChatPage() {
     setIsThinking(true);
     setThinkingText("");
     setError(null);
+    userHasScrolledUp.current = false; // Re-enable auto-scroll for new response
 
     const currentImages = [...pendingImages];
     setPendingImages([]);
@@ -456,12 +457,35 @@ export default function ChatPage() {
 
   // ── Scroll handling ───────────────────────────────────
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollToBottom = () =>
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const userHasScrolledUp = useRef(false);
 
+  const scrollToBottom = useCallback(() => {
+    if (!userHasScrolledUp.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, []);
+
+  // Detect if user scrolled away from bottom
+  const handleChatScroll = useCallback(() => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    // If user is within 80px of the bottom, consider them "at bottom"
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    userHasScrolledUp.current = !isNearBottom;
+  }, []);
+
+  // Auto-scroll on new content, but only when user is near bottom
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading, isThinking, thinkingText]);
+  }, [messages, isLoading, isThinking, thinkingText, scrollToBottom]);
+
+  // Reset scroll lock when loading finishes (new message sent)
+  useEffect(() => {
+    if (!isLoading) {
+      userHasScrolledUp.current = false;
+    }
+  }, [isLoading]);
 
   // ── Loading screen ────────────────────────────────────
   if (checkingAuth || !hasLoaded) {
@@ -636,7 +660,7 @@ export default function ChatPage() {
       </header>
 
       {/* ── Messages Area ── */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 bg-background/50 overscroll-y-contain">
+      <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 bg-background/50 overscroll-y-contain">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
