@@ -333,6 +333,12 @@ export default function ChatPage() {
         });
 
         if (!response.ok) {
+          if (response.status === 401) {
+            localStorage.removeItem('activation-token');
+            localStorage.removeItem('device-fingerprint');
+            setIsActivated(false);
+            return;
+          }
           const errData = await response.json().catch(() => ({}));
           throw new Error(errData.error || `HTTP Error: ${response.status}`);
         }
@@ -376,7 +382,15 @@ export default function ChatPage() {
           signal: controller.signal,
         });
 
-        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+        if (!response.ok) {
+          if (response.status === 401) {
+            localStorage.removeItem('activation-token');
+            localStorage.removeItem('device-fingerprint');
+            setIsActivated(false);
+            return;
+          }
+          throw new Error(`HTTP Error: ${response.status}`);
+        }
 
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
