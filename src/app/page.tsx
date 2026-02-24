@@ -78,12 +78,13 @@ export default function ChatPage() {
     return hash.toString(36);
   }, []);
 
-  // Auth headers helper
+  // Auth headers helper — use stored fingerprint (the one embedded in JWT at activation time)
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('activation-token') || '';
+    const fp = localStorage.getItem('device-fingerprint') || getFingerprint();
     return {
       'x-activation-token': token,
-      'x-device-fingerprint': getFingerprint(),
+      'x-device-fingerprint': fp,
     };
   }, [getFingerprint]);
 
@@ -107,14 +108,16 @@ export default function ChatPage() {
     setActivating(true);
     setActivationError("");
     try {
+      const fp = getFingerprint();
       const res = await fetch('/api/activate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: activationCode.trim(), fingerprint: getFingerprint() }),
+        body: JSON.stringify({ code: activationCode.trim(), fingerprint: fp }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '激活失败');
       localStorage.setItem('activation-token', data.token);
+      localStorage.setItem('device-fingerprint', fp);
       setIsActivated(true);
     } catch (err: any) {
       setActivationError(err.message || '激活失败');
