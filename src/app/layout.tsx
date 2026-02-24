@@ -20,7 +20,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#ffffff",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#030712" },
+  ],
 };
 
 export default function RootLayout({
@@ -41,6 +44,14 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              (function() {
+                var mq = window.matchMedia('(prefers-color-scheme: dark)');
+                function applyTheme(dark) {
+                  document.documentElement.classList.toggle('dark', dark);
+                }
+                applyTheme(mq.matches);
+                mq.addEventListener('change', function(e) { applyTheme(e.matches); });
+              })();
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
                   navigator.serviceWorker.register('/sw.js').catch(() => {});
