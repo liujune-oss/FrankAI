@@ -51,14 +51,52 @@ export function useAuth() {
         const token = localStorage.getItem('activation-token');
         if (token) {
             setIsActivated(true);
-        }
-        // Load saved system instruction
-        const savedInstruction = localStorage.getItem('system-instruction');
-        if (savedInstruction !== null) {
-            setSystemInstruction(savedInstruction);
+        } else {
+            // Only load locally if not activated yet (fallback)
+            const savedInstruction = localStorage.getItem('system-instruction');
+            if (savedInstruction !== null) {
+                setSystemInstruction(savedInstruction);
+            }
         }
         setCheckingAuth(false);
     }, []);
+
+    // Pull from Cloud Server
+    const pullSystemInstruction = useCallback(async () => {
+        try {
+            const res = await fetch('/api/sync/system-instruction', { headers: getAuthHeaders() });
+            const data = await res.json();
+            if (res.ok && data.instruction) {
+                setSystemInstruction(data.instruction);
+                localStorage.setItem('system-instruction', data.instruction);
+            } else if (!data.instruction) {
+                // First time login, push local to cloud
+                pushSystemInstruction(systemInstruction);
+            }
+        } catch (e) {
+            console.error('Failed to pull instruction', e);
+        }
+    }, [getAuthHeaders, systemInstruction]); // We'll disable eslint exhaustive deps for now or just include it
+
+    // Push System Instruction to cloud
+    const pushSystemInstruction = useCallback(async (content: string) => {
+        try {
+            await fetch('/api/sync/system-instruction', {
+                method: 'POST',
+                headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
+            });
+        } catch (e) {
+            console.error('Failed to push instruction', e);
+        }
+    }, [getAuthHeaders]);
+
+    // Pull after activation is confirmed
+    useEffect(() => {
+        if (isActivated) {
+            pullSystemInstruction();
+        }
+    }, [isActivated, pullSystemInstruction]);
 
     // Handle activation
     const handleActivate = useCallback(async () => {
@@ -103,5 +141,6 @@ export function useAuth() {
         systemInstruction,
         setSystemInstruction,
         DEFAULT_SYSTEM_INSTRUCTION,
+        pushSystemInstruction,
     };
 }

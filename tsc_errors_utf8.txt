@@ -1,0 +1,6 @@
+﻿src/app/api/chat/logger.ts(4,27): error TS7006: Parameter 'msg' implicitly has an 'any' type.
+src/app/api/vectorize/route.ts(36,48): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/api/vectorize/route.ts(36,76): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/api/vectorize/route.ts(40,48): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/components/ActivationGate.tsx(58,75): error TS2339: Property 'build' does not exist on type '{ major: number; minor: number; patch: number; }'.
+src/components/ConversationDrawer.tsx(176,79): error TS2339: Property 'build' does not exist on type '{ major: number; minor: number; patch: number; }'.

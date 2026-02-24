@@ -1,5 +1,21 @@
 # Gemini Chat — 发布记录
 
+## v1.5.0 — 2026-02-25
+- **新增：长效记忆 (RAG) 系统**
+  - 集成 Supabase + pgvector，支持对话历史向量化存储与相似度检索
+  - 自动提取对话摘要并建立记忆索引，提升 AI 长期上下文理解能力
+- **新增：Supabase 后端集成**
+  - 支持多设备访问授权、激活码校验
+  - 云端同步系统指令（System Instructions）
+- **新增：管理后台 (/admin)**
+  - 支持激活码生成、用户状态管理及设备权限控制
+- **优化与修复**
+  - 升级模型：采用 `gemini-3-flash-preview` 进行摘要提取，`gemini-embedding-001` 进行向量嵌入
+  - 解决 pgvector 3072 维向量索引限制问题（采用精确搜索）
+  - 修复 Vercel AI SDK 消息载荷解析异常导致的记忆提取失败
+  - 完善 API 日志记录与调试机制
+
+
 ## v1.4.0 — 2026-02-24
 - 重构：将 page.tsx（~990行）拆分为 5 个独立组件和 3 个自定义 Hooks
   - 组件：ActivationGate、ChatHeader、ConversationDrawer、MessageList、InputBar

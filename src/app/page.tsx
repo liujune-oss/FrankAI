@@ -41,6 +41,33 @@ export default function ChatPage() {
     );
   }
 
+  const handleMemory = async (convId: string) => {
+    const targetConv = conv.conversations.find(c => c.id === convId);
+    if (!targetConv || !targetConv.messages || targetConv.messages.length === 0) {
+      alert("此会话暂无记录，无法提炼记忆。");
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/vectorize', {
+        method: 'POST',
+        headers: {
+          ...auth.getAuthHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ conv_id: convId, messages: targetConv.messages })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert("已成功从该会话中提炼记忆，并存入私有向量库！");
+      } else {
+        alert("提取记忆失败: " + data.error);
+      }
+    } catch (e) {
+      alert("网络错误无法提取记忆");
+    }
+  };
+
   // ── Activation gate ──
   if (!auth.isActivated) {
     return (
@@ -65,9 +92,11 @@ export default function ChatPage() {
         onSwitch={(c) => conv.handleSwitchConversation(c, chat.isLoading)}
         onDelete={(id) => conv.handleDeleteConversation(id, chat.isLoading)}
         onClearAll={() => conv.handleClearAll(chat.isLoading)}
+        onMemory={handleMemory}
         systemInstruction={auth.systemInstruction}
         setSystemInstruction={auth.setSystemInstruction}
         defaultSystemInstruction={auth.DEFAULT_SYSTEM_INSTRUCTION}
+        pushSystemInstruction={auth.pushSystemInstruction}
       />
 
       <ChatHeader

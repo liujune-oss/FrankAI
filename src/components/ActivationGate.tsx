@@ -31,19 +31,20 @@ export default function ActivationGate({
                 <div className="space-y-3">
                     <input
                         type="text"
-                        className="w-full bg-muted/50 border border-input rounded-xl px-4 py-3 outline-none text-center text-lg tracking-widest font-mono focus:border-primary/50 transition-colors"
+                        maxLength={4}
+                        className="w-full bg-muted/50 border border-input rounded-xl px-4 py-4 outline-none text-center text-3xl tracking-[1em] indent-[1em] font-mono focus:border-primary/50 transition-colors uppercase"
                         value={activationCode}
-                        onChange={(e) => setActivationCode(e.target.value)}
-                        placeholder="输入激活码"
+                        onChange={(e) => setActivationCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
+                        placeholder="ABCD"
                         onKeyDown={(e) => e.key === 'Enter' && handleActivate()}
                         autoFocus
                     />
                     <button
                         onClick={handleActivate}
-                        disabled={activating || !activationCode.trim()}
+                        disabled={activating || activationCode.trim().length !== 4}
                         className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                        {activating ? '验证中...' : '激活'}
+                        {activating ? '正在验证并绑定设备...' : '激活设备'}
                     </button>
                 </div>
 
