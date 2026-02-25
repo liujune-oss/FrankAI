@@ -28,6 +28,7 @@ export function useChatStream({
     const [error, setError] = useState<Error | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isImageGenerating, setIsImageGenerating] = useState(false);
     const [pendingImages, setPendingImages] = useState<{ data: string; mimeType: string }[]>([]);
 
     const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,6 +52,7 @@ export function useChatStream({
         abortControllerRef.current = null;
         setIsLoading(false);
         setIsThinking(false);
+        setIsImageGenerating(false);
         setThinkingText("");
     }, []);
 
@@ -62,6 +64,8 @@ export function useChatStream({
         setThinkingText("");
         setError(null);
         userHasScrolledUp.current = false;
+
+        let progressInterval: NodeJS.Timeout | null = null;
 
         const currentImages = [...pendingImages];
         setPendingImages([]);
@@ -132,7 +136,7 @@ export function useChatStream({
             let streamedContent = "";
             let thinkingContent = "";
             let hasStartedText = false;
-            let toolCallDetected: { prompt: string } | null = null;
+            let toolCallDetected: { prompt: string; action?: string } | null = null;
 
             while (!done) {
                 const { value, done: doneReading } = await reader.read();
@@ -209,10 +213,11 @@ export function useChatStream({
             // using the actual tool, try to extract the prompt from it
             if (!toolCallDetected && streamedContent.trim()) {
                 try {
-                    // Try to find a JSON object embedded in the text
-                    const jsonMatch = streamedContent.match(/\{[\s\S]*"(?:action_input|prompt)"[\s\S]*\}/);
+                    // Match either pure JSON { ... "prompt" ... } or pseudo-syntax [generate_image: { ... "prompt" ... }]
+                    const matchPattern = streamedContent.match(/(?:\[generate_image:\s*)?(\{[\s\S]*"(?:action_input|prompt)"[\s\S]*\})/i);
+                    const jsonMatch = matchPattern ? matchPattern[1] : null;
                     if (jsonMatch) {
-                        const parsed = JSON.parse(jsonMatch[0]);
+                        const parsed = JSON.parse(jsonMatch);
                         let extractedPrompt = '';
                         if (parsed.action_input) {
                             try {
@@ -228,9 +233,15 @@ export function useChatStream({
                             extractedPrompt = parsed.prompt;
                         }
                         if (extractedPrompt) {
-                            toolCallDetected = { prompt: extractedPrompt };
-                            // Keep any text before the JSON as the model's regular response
-                            const beforeJson = streamedContent.substring(0, streamedContent.indexOf(jsonMatch[0])).trim();
+                            let action = 'generate';
+                            if (parsed.action) action = parsed.action;
+                            else if (typeof parsed.action_input === 'object' && parsed.action_input !== null && parsed.action_input.action) {
+                                action = parsed.action_input.action;
+                            }
+                            toolCallDetected = { prompt: extractedPrompt, action };
+                            // Keep any text before the tool as the model's regular response
+                            const matchIndex = matchPattern ? matchPattern.index || 0 : 0;
+                            const beforeJson = streamedContent.substring(0, matchIndex).trim();
                             streamedContent = beforeJson;
                         }
                     }
@@ -241,20 +252,39 @@ export function useChatStream({
 
             // If a generate_image tool call was detected, call the image generation API
             if (toolCallDetected) {
-                setIsThinking(true);
-                setThinkingText("正在生成图片...");
+                // Remove text thinking, show image skeleton instead
+                setIsThinking(false);
+                setThinkingText("");
+                setIsImageGenerating(true);
 
                 const history = newMessages.slice(0, -1).map((m: ChatMessage) => ({
                     role: m.role,
                     text: m.parts?.map((p: any) => p.text).filter(Boolean).join("\n") || "",
                 }));
 
-                // For chained edits: include user-uploaded or last assistant's images
-                const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
-                const lastMsgHadImages = lastAssistantMsg?.images && lastAssistantMsg.images.length > 0;
+                // Only send images that the user explicitly uploaded in this request.
+                // We no longer automatically chain previous assistant images to avoid unintended prompt mashups,
+                // unless the user strictly intended to edit the previous image.
                 let imagesToSend = currentImages.length > 0 ? currentImages : undefined;
-                if (!imagesToSend && lastMsgHadImages && lastAssistantMsg?.images) {
-                    imagesToSend = lastAssistantMsg.images;
+
+                let isEditIntent = toolCallDetected.action === 'edit';
+                // Fallback heuristic: If the prompt contains strong editing verbs, assume it's an edit
+                if (!isEditIntent && toolCallDetected.prompt) {
+                    const p = toolCallDetected.prompt.toLowerCase();
+                    if (p.includes('edit') || p.includes('change') || p.includes('modify') || p.includes('修改') || p.includes('换成') || p.includes('加上') || p.includes('去掉') || p.includes('把')) {
+                        isEditIntent = true;
+                    }
+                }
+
+                if (isEditIntent) {
+                    if (!imagesToSend) {
+                        // Find the most recent message in the chat history that had an image,
+                        // regardless of whether it was uploaded by the user or generated by the assistant.
+                        const lastMsgWithImages = [...messages].reverse().find(m => m.images && m.images.length > 0);
+                        if (lastMsgWithImages && lastMsgWithImages.images) {
+                            imagesToSend = lastMsgWithImages.images;
+                        }
+                    }
                 }
 
                 const imgResponse = await fetch('/api/generate-image', {
@@ -269,6 +299,7 @@ export function useChatStream({
                 });
 
                 if (!imgResponse.ok) {
+                    setIsImageGenerating(false);
                     if (imgResponse.status === 401) {
                         handleUnauthorized();
                         return;
@@ -278,7 +309,7 @@ export function useChatStream({
                 }
 
                 const imgData = await imgResponse.json();
-                setIsThinking(false);
+                setIsImageGenerating(false);
 
                 const imgTextParts = imgData.parts?.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n') || '';
                 const imgImageParts = imgData.parts?.filter((p: any) => p.type === 'image') || [];
@@ -317,6 +348,7 @@ export function useChatStream({
         } finally {
             setIsLoading(false);
             setIsThinking(false);
+            setIsImageGenerating(false);
             setThinkingText("");
             abortControllerRef.current = null;
         }
@@ -325,6 +357,7 @@ export function useChatStream({
     return {
         isLoading,
         isThinking,
+        isImageGenerating,
         thinkingText,
         error,
         setError,

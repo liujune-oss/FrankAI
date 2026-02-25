@@ -12,6 +12,7 @@ interface ConversationDrawerProps {
     onDelete: (id: string) => void;
     onClearAll: () => void;
     onMemory: (id: string) => void;
+    onOpenMemoryManager: () => void;
     extractingMemories: Set<string>;
     systemInstruction: string;
     setSystemInstruction: (value: string) => void;
@@ -29,6 +30,7 @@ export default function ConversationDrawer({
     onDelete,
     onClearAll,
     onMemory,
+    onOpenMemoryManager,
     extractingMemories,
     systemInstruction,
     setSystemInstruction,
@@ -104,8 +106,8 @@ export default function ConversationDrawer({
                                     }}
                                     disabled={extractingMemories.has(conv.id)}
                                     className={`p-1.5 rounded-lg transition-all ${extractingMemories.has(conv.id)
-                                            ? "text-blue-500 bg-blue-500/10 cursor-wait flex items-center justify-center pointer-events-none"
-                                            : "hover:bg-blue-500/10 text-muted-foreground/50 hover:text-blue-500"
+                                        ? "text-blue-500 bg-blue-500/10 cursor-wait flex items-center justify-center pointer-events-none"
+                                        : "hover:bg-blue-500/10 text-muted-foreground/50 hover:text-blue-500"
                                         }`}
                                     title={extractingMemories.has(conv.id) ? "正在提炼记忆..." : "持续记忆（提炼当前会话知识）"}
                                 >
@@ -171,6 +173,20 @@ export default function ConversationDrawer({
                             </button>
                         </div>
                     )}
+                </div>
+
+                {/* Memory Manager */}
+                <div className="px-3 py-2 border-t">
+                    <button
+                        onClick={() => {
+                            onClose();
+                            onOpenMemoryManager();
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs bg-blue-50/50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-400 rounded-lg transition-colors border border-blue-100 dark:border-blue-900/50 font-medium"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" /><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" /><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" /><path d="M17.599 6.5a3 3 0 0 0 .399-1.375" /></svg>
+                        记忆管理
+                    </button>
                 </div>
 
                 {/* Clear all */}

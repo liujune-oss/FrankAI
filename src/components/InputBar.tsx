@@ -1,4 +1,4 @@
-import { RefObject } from "react";
+import { RefObject, useRef, useEffect } from "react";
 
 interface ChatModelOption {
     id: string;
@@ -37,6 +37,14 @@ export default function InputBar({
     onImageUpload,
     fileInputRef,
 }: InputBarProps) {
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    useEffect(() => {
+        if (input === "" && textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+        }
+    }, [input]);
+
     return (
         <div className="flex-none px-3 pt-2 pb-3 bg-background">
             {/* Hidden file input */}
@@ -82,6 +90,7 @@ export default function InputBar({
             >
                 {/* Text input - auto-expanding textarea */}
                 <textarea
+                    ref={textareaRef}
                     className="w-full bg-transparent px-5 pt-3.5 pb-2 outline-none text-base placeholder:text-muted-foreground/60 resize-none overflow-hidden"
                     value={input}
                     placeholder="问问 Gemini"

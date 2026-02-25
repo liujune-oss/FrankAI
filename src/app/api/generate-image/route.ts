@@ -16,15 +16,18 @@ export async function POST(req: Request) {
     try {
         const { prompt, history, images } = await req.json();
 
-        // Build contents from history (text only — images in history cause
-        // thought_signature errors with thinking-capable models)
+        // Build contents from history (text only)
+        // Only include history if we are NOT editing an image. 
+        // Including history with inlineData causes issues with gemini-2.5-flash-image models.
         const contents: any[] = [];
-        if (history && Array.isArray(history)) {
-            for (const msg of history) {
-                const parts: any[] = [];
-                if (msg.text) parts.push({ text: msg.text });
-                if (parts.length > 0) {
-                    contents.push({ role: msg.role === 'assistant' ? 'model' : 'user', parts });
+        if (!images || images.length === 0) {
+            if (history && Array.isArray(history)) {
+                for (const msg of history) {
+                    const parts: any[] = [];
+                    if (msg.text) parts.push({ text: msg.text });
+                    if (parts.length > 0) {
+                        contents.push({ role: msg.role === 'assistant' ? 'model' : 'user', parts });
+                    }
                 }
             }
         }

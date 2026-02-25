@@ -41,6 +41,8 @@ Gemini Chat 是一个由 Google Gemini 驱动的私人 AI 聊天助手，以 PWA
 - 利用 gemini-embedding-001 模型转化为 3072 维记忆向量存入云端 (Supabase)
 - 新对话中自动采用 RAG (检索增强) 无感调取相似记忆
 - 跨设备云同步自定义系统指令 (System Instructions)
+- 提供界面化的用户端管理抽屉，随时预览、编辑增补和清空记忆网络
+- 在独立管理后台提供按用户归档的全局记忆池检阅与清理权限
 
 ### 📱 PWA 体验
 - 可安装到主屏幕，全屏独立运行
@@ -54,4 +56,4 @@ Gemini Chat 是一个由 Google Gemini 驱动的私人 AI 聊天助手，以 PWA
 
 ## 当前版本
 
-**v1.5.0**
+**v1.8.0**

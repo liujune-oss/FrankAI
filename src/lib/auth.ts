@@ -31,6 +31,26 @@ export async function verifyToken(token: string | null, fingerprint: string | nu
 }
 
 /**
+ * Verify Admin JWT token
+ * Returns payload if valid, false otherwise
+ */
+export async function verifyAdminToken(token: string | null): Promise<any | false> {
+    if (!token) return false;
+    try {
+        // We use the same secret, but check for an admin flag or just validity 
+        // since the admin token is generated differently (e.g., login route)
+        // Adjust this if your admin token payload is different.
+        const { payload } = await jwtVerify(token, getSecret());
+        if (payload.role === 'admin') {
+            return payload;
+        }
+        return false;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Extract auth info from request headers
  */
 export function getAuthFromHeaders(req: Request) {

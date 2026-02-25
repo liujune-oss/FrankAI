@@ -9,6 +9,7 @@ import ChatHeader from "@/components/ChatHeader";
 import ConversationDrawer from "@/components/ConversationDrawer";
 import MessageList from "@/components/MessageList";
 import InputBar from "@/components/InputBar";
+import MemoryManager from "@/components/MemoryManager";
 
 const DEFAULT_MODELS = [
   { id: 'gemini-3.1-pro-preview', label: '3.1 Pro', group: 'Gemini 3.x' },
@@ -26,6 +27,7 @@ export default function ChatPage() {
   const [model, setModel] = useState("gemini-3-flash-preview");
   const [availableModels, setAvailableModels] = useState(DEFAULT_MODELS);
   const [extractingMemories, setExtractingMemories] = useState<Set<string>>(new Set());
+  const [isMemoryManagerOpen, setIsMemoryManagerOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const userHasScrolledUpRef = useRef(false);
 
@@ -133,7 +135,7 @@ export default function ChatPage() {
   }
 
   return (
-    <main className="flex flex-col h-[100dvh] bg-background w-full max-w-2xl mx-auto shadow-sm pb-[env(safe-area-inset-bottom)] relative overflow-hidden">
+    <main className="flex flex-col h-[100dvh] bg-background w-full max-w-4xl mx-auto shadow-sm pb-[env(safe-area-inset-bottom)] relative overflow-hidden">
       <ConversationDrawer
         open={conv.drawerOpen}
         onClose={() => conv.setDrawerOpen(false)}
@@ -144,6 +146,7 @@ export default function ChatPage() {
         onDelete={(id) => conv.handleDeleteConversation(id, chat.isLoading)}
         onClearAll={() => conv.handleClearAll(chat.isLoading)}
         onMemory={handleMemory}
+        onOpenMemoryManager={() => setIsMemoryManagerOpen(true)}
         extractingMemories={extractingMemories}
         systemInstruction={auth.systemInstruction}
         setSystemInstruction={auth.setSystemInstruction}
@@ -161,6 +164,7 @@ export default function ChatPage() {
         messages={conv.messages}
         isLoading={chat.isLoading}
         isThinking={chat.isThinking}
+        isImageGenerating={chat.isImageGenerating}
         thinkingText={chat.thinkingText}
         error={chat.error}
       />
@@ -185,8 +189,8 @@ export default function ChatPage() {
       {toast && (
         <div className="absolute top-4 sm:top-auto sm:bottom-24 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-5 sm:slide-in-from-bottom-10 duration-300">
           <div className={`px-4 py-3 rounded-full shadow-lg backdrop-blur-md border border-white/10 text-sm font-medium flex items-center gap-2 ${toast.type === 'success' ? 'bg-green-500/90 text-white' :
-              toast.type === 'error' ? 'bg-red-500/90 text-white' :
-                'bg-zinc-800/90 text-white'
+            toast.type === 'error' ? 'bg-red-500/90 text-white' :
+              'bg-zinc-800/90 text-white'
             }`}>
             {toast.type === 'success' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>}
             {toast.type === 'error' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>}
@@ -195,6 +199,12 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      {/* Memory Manager Modal */}
+      <MemoryManager
+        open={isMemoryManagerOpen}
+        onClose={() => setIsMemoryManagerOpen(false)}
+      />
     </main>
   );
 }

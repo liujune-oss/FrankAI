@@ -9,6 +9,7 @@ interface MessageListProps {
     messages: ChatMessage[];
     isLoading: boolean;
     isThinking: boolean;
+    isImageGenerating?: boolean;
     thinkingText: string;
     error: Error | null;
 }
@@ -17,6 +18,7 @@ export default function MessageList({
     messages,
     isLoading,
     isThinking,
+    isImageGenerating,
     thinkingText,
     error,
 }: MessageListProps) {
@@ -59,7 +61,7 @@ export default function MessageList({
     // Auto-scroll on new content
     useEffect(() => {
         scrollToBottom();
-    }, [messages, isLoading, isThinking, thinkingText, scrollToBottom]);
+    }, [messages, isLoading, isThinking, isImageGenerating, thinkingText, scrollToBottom]);
 
     // Reset scroll lock when loading finishes
     useEffect(() => {
@@ -82,10 +84,14 @@ export default function MessageList({
                 </div>
             ) : (
                 messages.map((m: ChatMessage) => {
-                    const content = m.parts
+                    let content = m.parts
                         .filter((p) => p.type === "text")
                         .map((p) => (p as any).text)
                         .join("\n");
+
+                    // Filter out the internal text placeholder used for image payloads
+                    content = content.replace(/\[Generated \d+ image\(s\)\]\n?/g, "");
+
                     return (
                         <div key={m.id} className="space-y-2">
                             {m.role === "assistant" && m.thinking && (
@@ -101,9 +107,9 @@ export default function MessageList({
                                     </details>
                                 </div>
                             )}
-                            {/* Images */}
-                            {m.images && m.images.length > 0 && (
-                                <div className={`flex w-full ${m.role === "user" ? "justify-end" : "justify-start"} mb-1`}>
+                            {/* Images (For User Uploads) */}
+                            {m.role === "user" && m.images && m.images.length > 0 && (
+                                <div className="flex w-full justify-end mb-1">
                                     <div className="flex flex-wrap gap-2 max-w-[85%]">
                                         {m.images.map((img, idx) => {
                                             const src = `data:${img.mimeType};base64,${img.data}`;
@@ -136,11 +142,52 @@ export default function MessageList({
                                     ) : (
                                         content
                                     )}
+                                    {/* Final Image Rendering */}
+                                    {m.images && m.images.length > 0 && (
+                                        <div className="mt-2 space-y-2">
+                                            <div className="flex flex-wrap gap-2">
+                                                {m.images.map((img, idx) => {
+                                                    const src = `data:${img.mimeType};base64,${img.data}`;
+                                                    return (
+                                                        <img
+                                                            key={idx}
+                                                            src={src}
+                                                            alt="Generated Image"
+                                                            onClick={() => setLightboxSrc(src)}
+                                                            className="rounded-xl w-[85%] sm:w-[320px] aspect-square object-cover shadow-sm border cursor-pointer hover:opacity-95 hover:shadow-md transition-all"
+                                                        />
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     );
                 })
+            )}
+
+
+
+            {/* Image Generating Skeleton */}
+            {isImageGenerating && (
+                <div className="flex w-full justify-start mt-4 mb-2">
+                    <div className="w-[85%] sm:w-[320px] aspect-square rounded-2xl overflow-hidden relative shadow-sm border border-border/50 bg-muted/30">
+                        {/* Shimmer Background */}
+                        <div className="absolute inset-0 bg-gradient-to-tr from-muted/20 via-muted-foreground/10 to-muted/20 animate-pulse" />
+
+                        {/* Center Icon */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="animate-pulse mb-3">
+                                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                                <circle cx="9" cy="9" r="2" />
+                                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                            </svg>
+                            <span className="text-xs font-medium tracking-wide animate-pulse">正在渲染图像...</span>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Thinking indicator */}
@@ -164,7 +211,7 @@ export default function MessageList({
                 </div>
             )}
 
-            {isLoading && !isThinking && messages[messages.length - 1]?.role === "user" && (
+            {isLoading && !isThinking && !isImageGenerating && messages[messages.length - 1]?.role === "user" && (
                 <div className="flex w-full justify-start">
                     <div className="flex items-center max-w-[85%] rounded-2xl px-4 py-3 bg-muted text-foreground rounded-tl-sm border">
                         <div className="flex space-x-1.5 items-center">

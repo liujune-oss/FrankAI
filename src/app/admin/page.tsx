@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, KeyRound, MonitorSmartphone, Ban, ShieldCheck, LogOut, Loader2, RefreshCw, Settings, Cpu, Plus, Trash2, Save, Download } from 'lucide-react';
+import { Users, KeyRound, MonitorSmartphone, Ban, ShieldCheck, LogOut, Loader2, RefreshCw, Settings, Cpu, Plus, Trash2, Save, Download, BrainCircuit, ChevronDown, ChevronRight } from 'lucide-react';
 
 type ChatModel = {
     id: string;
@@ -53,7 +53,7 @@ export default function AdminDashboard() {
     const [newUsername, setNewUsername] = useState('');
     const [newMaxUses, setNewMaxUses] = useState(3);
     const [isCreating, setIsCreating] = useState(false);
-    const [activeTab, setActiveTab] = useState<'users' | 'models'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'models' | 'memories'>('users');
 
     // Model config states
     const [chatModels, setChatModels] = useState<ChatModel[]>([]);
@@ -73,10 +73,16 @@ export default function AdminDashboard() {
     const [newModelLabel, setNewModelLabel] = useState('');
     const [newModelGroup, setNewModelGroup] = useState('');
 
+    // Admin Memories states
+    const [adminMemories, setAdminMemories] = useState<any[]>([]);
+    const [memoriesLoading, setMemoriesLoading] = useState(false);
+    const [expandedMemoryUsers, setExpandedMemoryUsers] = useState<Set<string>>(new Set());
+
     useEffect(() => {
-        fetchUsers();
-        fetchConfig();
-    }, []);
+        if (activeTab === 'users') fetchUsers();
+        if (activeTab === 'models') fetchConfig();
+        if (activeTab === 'memories') fetchAdminMemories();
+    }, [activeTab]);
 
     const fetchUsers = async () => {
         try {
@@ -139,6 +145,64 @@ export default function AdminDashboard() {
         } finally {
             setFetchingModels(false);
         }
+    };
+
+    const fetchAdminMemories = async () => {
+        try {
+            setMemoriesLoading(true);
+            const res = await fetch('/api/admin/memories');
+            if (res.status === 401) {
+                router.push('/admin/login');
+                return;
+            }
+            const data = await res.json();
+            if (data.success) {
+                setAdminMemories(data.memories || []);
+            } else {
+                setError(data.error);
+            }
+        } catch (err) {
+            setError('Failed to fetch memories');
+        } finally {
+            setMemoriesLoading(false);
+        }
+    };
+
+    const handleDeleteMemory = async (id: string) => {
+        if (!confirm('确定要强制删除该条记忆吗？')) return;
+        try {
+            const res = await fetch('/api/admin/memories', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id }),
+            });
+            if (res.ok) fetchAdminMemories();
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleClearUserMemories = async (user_id: string, username: string) => {
+        if (!confirm(`警告：确定要清空用户 "${username}" 的所有记忆吗？此操作不可恢复。`)) return;
+        try {
+            const res = await fetch('/api/admin/memories', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clear_user_id: user_id }),
+            });
+            if (res.ok) fetchAdminMemories();
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const toggleMemoryUserExpanded = (userId: string) => {
+        setExpandedMemoryUsers(prev => {
+            const next = new Set(prev);
+            if (next.has(userId)) next.delete(userId);
+            else next.add(userId);
+            return next;
+        });
     };
 
     const handleSaveConfig = async () => {
@@ -301,7 +365,11 @@ export default function AdminDashboard() {
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <button onClick={fetchUsers} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                        <button onClick={() => {
+                            if (activeTab === 'users') fetchUsers();
+                            if (activeTab === 'models') fetchConfig();
+                            if (activeTab === 'memories') fetchAdminMemories();
+                        }} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
                             <RefreshCw className="w-5 h-5" />
                         </button>
                         <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded-lg transition-colors">
@@ -335,6 +403,15 @@ export default function AdminDashboard() {
                             }`}
                     >
                         <Cpu className="w-4 h-4" /> 模型管理
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('memories')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'memories'
+                            ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50/50 dark:bg-emerald-900/10 dark:text-emerald-400'
+                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                            }`}
+                    >
+                        <BrainCircuit className="w-4 h-4" /> 记忆池管理
                     </button>
                 </div>
 
@@ -639,6 +716,112 @@ export default function AdminDashboard() {
 
                     </section>
                 </>)}
+
+                {activeTab === 'memories' && (
+                    <section className="space-y-6">
+                        <div className="flex items-center justify-between px-2">
+                            <h2 className="text-xl font-bold">全站专属记忆池 ({adminMemories.length})</h2>
+                        </div>
+
+                        {memoriesLoading ? (
+                            <div className="flex justify-center py-8 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                                <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+                            </div>
+                        ) : adminMemories.length === 0 ? (
+                            <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 border-dashed">
+                                <BrainCircuit className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">暂无任何记忆数据</h3>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-6">
+                                {(() => {
+                                    // Group memories by user
+                                    const memoriesByUser = adminMemories.reduce((acc, memory) => {
+                                        if (!acc[memory.user_id]) {
+                                            acc[memory.user_id] = {
+                                                username: memory.username,
+                                                memories: []
+                                            };
+                                        }
+                                        acc[memory.user_id].memories.push(memory);
+                                        return acc;
+                                    }, {} as Record<string, { username: string, memories: any[] }>);
+
+                                    return Object.entries(memoriesByUser).map(([userId, userGroup]: [string, any]) => {
+                                        const isExpanded = expandedMemoryUsers.has(userId);
+                                        return (
+                                            <div key={userId} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                {/* Accordion Header */}
+                                                <div
+                                                    onClick={() => toggleMemoryUserExpanded(userId)}
+                                                    className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors border-b border-transparent dark:border-transparent group"
+                                                >
+                                                    <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden">
+                                                        <div className="p-2.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-xl flex-none">
+                                                            <Users className="w-5 h-5" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate flex items-center gap-2">
+                                                                {userGroup.username}
+                                                                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                                                    {userGroup.memories.length} 条记忆
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-xs text-gray-500 font-mono mt-1 opacity-70">ID: {userId}</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-3 w-full sm:w-auto mt-4 sm:mt-0 justify-end" onClick={e => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleClearUserMemories(userId, userGroup.username);
+                                                            }}
+                                                            className="flex-none px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 rounded-lg transition-colors border border-red-200 dark:border-red-800/50"
+                                                        >
+                                                            清空该用户
+                                                        </button>
+                                                        <div className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400">
+                                                            {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Accordion Body */}
+                                                {isExpanded && (
+                                                    <div className="p-4 sm:p-6 bg-gray-50/50 dark:bg-gray-900/20 border-t border-gray-100 dark:border-gray-700 space-y-4">
+                                                        {userGroup.memories.map((memory: any) => (
+                                                            <div key={memory.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm relative group">
+                                                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <button
+                                                                        onClick={() => handleDeleteMemory(memory.id)}
+                                                                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-800/50"
+                                                                        title="删除单条数据"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+
+                                                                <div className="pr-10 text-sm text-gray-700 dark:text-gray-300 font-mono leading-relaxed whitespace-pre-wrap break-all relative">
+                                                                    {memory.content}
+                                                                </div>
+
+                                                                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 text-xs text-gray-400 flex items-center justify-between">
+                                                                    <span className="font-mono">{new Date(memory.created_at).toLocaleString()}</span>
+                                                                    <span className="font-mono text-[10px] opacity-40">Data ID: {memory.id}</span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        )}
+                    </section>
+                )}
             </div>
         </div>
     );
