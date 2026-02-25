@@ -12,6 +12,7 @@ interface ConversationDrawerProps {
     onDelete: (id: string) => void;
     onClearAll: () => void;
     onMemory: (id: string) => void;
+    extractingMemories: Set<string>;
     systemInstruction: string;
     setSystemInstruction: (value: string) => void;
     defaultSystemInstruction: string;
@@ -28,6 +29,7 @@ export default function ConversationDrawer({
     onDelete,
     onClearAll,
     onMemory,
+    extractingMemories,
     systemInstruction,
     setSystemInstruction,
     defaultSystemInstruction,
@@ -96,12 +98,25 @@ export default function ConversationDrawer({
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        onMemory(conv.id);
+                                        if (!extractingMemories.has(conv.id)) {
+                                            onMemory(conv.id);
+                                        }
                                     }}
-                                    className="p-1.5 rounded-lg hover:bg-blue-500/10 text-muted-foreground/50 hover:text-blue-500 transition-all"
-                                    title="持续记忆（提炼当前会话知识）"
+                                    disabled={extractingMemories.has(conv.id)}
+                                    className={`p-1.5 rounded-lg transition-all ${extractingMemories.has(conv.id)
+                                            ? "text-blue-500 bg-blue-500/10 cursor-wait flex items-center justify-center pointer-events-none"
+                                            : "hover:bg-blue-500/10 text-muted-foreground/50 hover:text-blue-500"
+                                        }`}
+                                    title={extractingMemories.has(conv.id) ? "正在提炼记忆..." : "持续记忆（提炼当前会话知识）"}
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" /><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" /><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" /><path d="M17.599 6.5a3 3 0 0 0 .399-1.375" /></svg>
+                                    {extractingMemories.has(conv.id) ? (
+                                        <svg className="animate-spin text-blue-500 h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    ) : (
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" /><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" /><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" /><path d="M17.599 6.5a3 3 0 0 0 .399-1.375" /></svg>
+                                    )}
                                 </button>
                                 <button
                                     onClick={(e) => {

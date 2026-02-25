@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
+import { getConfig } from '@/lib/config';
 
 export const maxDuration = 120;
 
@@ -13,31 +14,38 @@ export async function POST(req: Request) {
     }
 
     try {
-        const { prompt, history } = await req.json();
+        const { prompt, history, images } = await req.json();
 
-        // Build contents from history + current prompt
+        // Build contents from history (text only — images in history cause
+        // thought_signature errors with thinking-capable models)
         const contents: any[] = [];
         if (history && Array.isArray(history)) {
             for (const msg of history) {
                 const parts: any[] = [];
                 if (msg.text) parts.push({ text: msg.text });
-                if (msg.images) {
-                    for (const img of msg.images) {
-                        parts.push({
-                            inlineData: { mimeType: img.mimeType, data: img.data }
-                        });
-                    }
-                }
                 if (parts.length > 0) {
                     contents.push({ role: msg.role === 'assistant' ? 'model' : 'user', parts });
                 }
             }
         }
-        // Add current prompt
-        contents.push({ role: 'user', parts: [{ text: prompt }] });
+        // Add current prompt with optional uploaded images
+        let finalPrompt = prompt;
+        const promptParts: any[] = [];
+        if (images && Array.isArray(images) && images.length > 0) {
+            // When images are provided, instruct the model to edit them
+            finalPrompt = `Edit the provided image based on this instruction: ${prompt}. Keep everything else unchanged.`;
+            for (const img of images) {
+                promptParts.push({
+                    inlineData: { mimeType: img.mimeType, data: img.data }
+                });
+            }
+        }
+        promptParts.unshift({ text: finalPrompt });
+        contents.push({ role: 'user', parts: promptParts });
 
+        const imageModelName = await getConfig<string>('image_gen_model') || 'gemini-2.5-flash-image';
         const response = await genai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
+            model: imageModelName,
             contents,
             config: {
                 responseModalities: ['TEXT', 'IMAGE'],

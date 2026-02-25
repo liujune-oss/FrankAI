@@ -1,9 +1,11 @@
 import { google } from '@ai-sdk/google';
 import { streamText } from 'ai';
+import { z } from 'zod';
 import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { supabaseAdmin } from '@/lib/supabase';
 import { appendLog } from './logger';
+import { getConfig } from '@/lib/config';
 
 // Allow streaming responses up to 120 seconds (Pro models think longer)
 export const maxDuration = 120;
@@ -42,7 +44,8 @@ export async function POST(req: Request) {
         if (queryText && supabaseAdmin) {
             try {
                 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
-                const embeddingModel = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
+                const embeddingModelName = await getConfig<string>('memory_embedding_model') || 'gemini-embedding-001';
+                const embeddingModel = genAI.getGenerativeModel({ model: embeddingModelName });
                 const embedResult = await embeddingModel.embedContent(queryText);
                 const embedding = embedResult.embedding.values;
 
@@ -90,12 +93,21 @@ export async function POST(req: Request) {
             return msg;
         });
 
+        // Append tool usage instruction
+        finalSystemInstruction += '\n\n[Tool Usage] When the user asks you to generate, create, draw, edit, or modify an image, you MUST use the `generate_image` tool. Do NOT output JSON or text that simulates a tool call. Always invoke the tool directly.';
+
         const result = streamText({
             model: google(model),
             system: finalSystemInstruction || undefined,
             messages: processedMessages,
             tools: {
                 google_search: google.tools.googleSearch({}),
+                generate_image: {
+                    description: 'Generate, create, draw, edit, or modify images based on user request. Call this when the user wants to create a new image, edit/modify an existing image, draw something, or do any visual content creation.',
+                    inputSchema: z.object({
+                        prompt: z.string().describe('The image generation or editing prompt. Rewrite the user request into a detailed, descriptive prompt optimized for image generation. If editing an uploaded image, describe the changes to make.'),
+                    }),
+                },
             },
             providerOptions: {
                 google: {

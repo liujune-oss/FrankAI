@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChatMessage } from "@/types/chat";
@@ -23,6 +23,25 @@ export default function MessageList({
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const userHasScrolledUp = useRef(false);
+    const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+    const handleDownload = useCallback(() => {
+        if (!lightboxSrc) return;
+        const a = document.createElement('a');
+        a.href = lightboxSrc;
+        a.download = `image-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }, [lightboxSrc]);
+
+    // Close lightbox on ESC
+    useEffect(() => {
+        if (!lightboxSrc) return;
+        const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxSrc(null); };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [lightboxSrc]);
 
     const scrollToBottom = useCallback(() => {
         if (!userHasScrolledUp.current) {
@@ -86,14 +105,18 @@ export default function MessageList({
                             {m.images && m.images.length > 0 && (
                                 <div className={`flex w-full ${m.role === "user" ? "justify-end" : "justify-start"} mb-1`}>
                                     <div className="flex flex-wrap gap-2 max-w-[85%]">
-                                        {m.images.map((img, idx) => (
-                                            <img
-                                                key={idx}
-                                                src={`data:${img.mimeType};base64,${img.data}`}
-                                                alt="uploaded"
-                                                className="rounded-xl max-h-48 max-w-[200px] object-cover border"
-                                            />
-                                        ))}
+                                        {m.images.map((img, idx) => {
+                                            const src = `data:${img.mimeType};base64,${img.data}`;
+                                            return (
+                                                <img
+                                                    key={idx}
+                                                    src={src}
+                                                    alt="uploaded"
+                                                    onClick={() => setLightboxSrc(src)}
+                                                    className="rounded-xl max-h-48 max-w-[200px] object-cover border cursor-pointer hover:opacity-90 hover:shadow-lg transition-all active:scale-95"
+                                                />
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -162,6 +185,38 @@ export default function MessageList({
             )}
 
             <div ref={messagesEndRef} className="h-1" />
+
+            {/* Lightbox */}
+            {lightboxSrc && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setLightboxSrc(null)}
+                >
+                    {/* Toolbar */}
+                    <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleDownload(); }}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium backdrop-blur-sm transition-colors"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                            下载
+                        </button>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setLightboxSrc(null); }}
+                            className="flex items-center justify-center w-9 h-9 rounded-lg bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm transition-colors"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                        </button>
+                    </div>
+                    {/* Image */}
+                    <img
+                        src={lightboxSrc}
+                        alt="preview"
+                        onClick={(e) => e.stopPropagation()}
+                        className="max-w-[90vw] max-h-[85vh] rounded-xl shadow-2xl object-contain"
+                    />
+                </div>
+            )}
         </div>
     );
 }

@@ -3,23 +3,25 @@
 ## 架构概览
 
 ```
-┌─────────────────────────────────────────┐
-│           客户端 (Next.js CSR)           │
-│  page.tsx — 单页聊天 UI                  │
-│  conversations.ts — IndexedDB 会话管理    │
-│  auth headers — JWT + 设备指纹           │
-├──────────────┬──────────────────────────┤
-│              │  API Routes (Server)     │
-│              ├──────────────────────────┤
-│              │  /api/chat     — 流式聊天 │
-│              │  /api/activate — 激活鉴权 │
-│              │  /api/vectorize— 记忆提取 │
-│              │  /api/admin    — 管理后台 │
-├──────────────┴──────────────────────────┤
-│             后端服务生态圈               │
-│  Google Gemini API    — 推理 / 向量化     │
-│  Supabase (Postgres)  — Auth / Pgvector │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│           客户端 (Next.js CSR)                │
+│  page.tsx — 单页聊天 UI                       │
+│  conversations.ts — IndexedDB 会话管理         │
+│  auth headers — JWT + 设备指纹                │
+├──────────────┬───────────────────────────────┤
+│              │  API Routes (Server)          │
+│              ├───────────────────────────────┤
+│              │  /api/chat          — 流式聊天 │
+│              │  /api/generate-image — 图片生成│
+│              │  /api/activate      — 激活鉴权 │
+│              │  /api/vectorize     — 记忆提取 │
+│              │  /api/admin/*       — 管理后台 │
+│              │  /api/config        — 配置读取 │
+├──────────────┴───────────────────────────────┤
+│             后端服务生态圈                     │
+│  Google Gemini API    — 推理 / 向量化 / 图片   │
+│  Supabase (Postgres)  — Auth / Pgvector      │
+└──────────────────────────────────────────────┘
 ```
 
 ## 技术栈
@@ -41,15 +43,20 @@
 ### 1. 聊天流 (`/api/chat`)
 - 使用 AI SDK 的 `streamText()` 进行流式响应
 - 支持 `systemInstruction` 自定义系统提示
-- 内置 Google Search 工具（grounding）
+- 内置工具（Function Calling）：
+  - `google_search` — Google 搜索 grounding
+  - `generate_image` — AI 判断用户意图后触发图片生成
 - Thinking 配置：`thinkingBudget: 1024`
-- 模型通过 URL query 参数动态指定
+- 模型通过 URL query 参数动态指定（默认 `gemini-3.1-pro-preview`）
 - 最大响应时间 120 秒
 
 ### 2. 图片生成 (`/api/generate-image`)
-- 使用 `@google/genai` 直接调用 Gemini API
-- 模型：`gemini-2.5-flash-image`
-- 支持多轮对话历史上下文（含图片）
+- 使用 `@google/genai` 直接调用 Gemini API（`GoogleGenAI`）
+- 模型从 Supabase `app_config` 配置读取（默认 `gemini-2.5-flash-image`）
+- 意图检测：由聊天模型通过 Function Calling 自主决定是否生成图片
+- 前端 Fallback：若模型以 JSON 文本模拟工具调用，自动解析提取 prompt
+- 图片编辑：携带上次生成/用户上传的图片时，自动添加「基于原图修改」指令
+- 历史处理：仅传文字历史，跳过图片以避免 `thought_signature` 错误
 - 响应格式：`{ parts: [{ type, text?, data?, mimeType? }] }`
 
 ### 3. 激活鉴权 (`/api/activate` + `lib/auth.ts`)
@@ -76,6 +83,7 @@
 - 侧栏抽屉：会话列表 + 系统指令编辑 + 清空按钮
 - 消息气泡：用户靠右，AI 靠左；AI 消息支持 Markdown 渲染
 - 图片显示：用户上传图片和 AI 生成图片内联显示
+- 图片 Lightbox：点击图片全屏预览，支持下载按钮、ESC / 点击背景关闭
 - 智能滚动：自动滚底，用户上滑时暂停自动滚动
 - 思考动画：三点脉冲 + 思考文字实时更新
 
@@ -92,6 +100,9 @@
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini API Key |
 | `ACTIVATION_CODES` | 激活码列表（逗号分隔） |
 | `ACTIVATION_SECRET` | JWT 签名密钥 |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase 项目 URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase 匿名 Key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase 服务端 Key |
 
 ## 目录结构
 
@@ -103,24 +114,32 @@ gemini-chat-pwa/
 │   │   ├── layout.tsx            # 根布局（主题、PWA）
 │   │   ├── globals.css           # 全局样式 + 深色主题
 │   │   └── api/
-│   │       ├── chat/route.ts     # 流式聊天 API
+│   │       ├── chat/route.ts     # 流式聊天 API + Function Calling
+│   │       ├── generate-image/route.ts  # 图片生成/编辑 API
 │   │       ├── activate/route.ts # 激活码验证 API
-│   │       └── generate-image/route.ts  # AI 图片生成 API
+│   │       ├── vectorize/route.ts # 记忆向量化 API
+│   │       ├── config/route.ts   # 前端配置读取 API
+│   │       └── admin/            # 管理后台 API
+│   │           ├── config/route.ts   # 配置读写
+│   │           ├── models/route.ts   # 模型列表
+│   │           └── users/route.ts    # 用户管理
 │   ├── components/
 │   │   ├── ActivationGate.tsx    # 激活码输入界面
 │   │   ├── ChatHeader.tsx        # 顶栏（菜单+标题+状态）
 │   │   ├── ConversationDrawer.tsx # 会话列表抽屉
-│   │   ├── MessageList.tsx       # 消息列表+滚动+Markdown
+│   │   ├── MessageList.tsx       # 消息列表+Lightbox+Markdown
 │   │   └── InputBar.tsx          # 输入框+工具栏+模型选择
 │   ├── hooks/
 │   │   ├── useAuth.ts            # 激活鉴权 Hook
 │   │   ├── useConversations.ts   # 会话管理 Hook
-│   │   └── useChatStream.ts      # 聊天流+图片生成 Hook
+│   │   └── useChatStream.ts      # 聊天流+工具调用+图片 Hook
 │   ├── types/
 │   │   └── chat.ts               # 共享类型定义
 │   └── lib/
 │       ├── auth.ts               # JWT 鉴权工具
+│       ├── config.ts             # Supabase 配置读取
 │       ├── conversations.ts      # IndexedDB 会话管理
+│       ├── supabase.ts           # Supabase 客户端
 │       └── utils.ts              # 通用工具（cn）
 ├── public/
 │   ├── manifest.json             # PWA 清单

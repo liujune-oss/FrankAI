@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { appendLog } from '../chat/logger';
+import { getConfigs } from '@/lib/config';
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
 
@@ -26,8 +27,13 @@ export async function POST(req: NextRequest) {
         }
         appendLog("VECTORIZE RECEIVED MESSAGES:\n" + JSON.stringify(messages, null, 2));
 
-        // 1. Generate Summary using a fast model
-        const summaryModel = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+        // Read model names from config
+        const configs = await getConfigs(['memory_summary_model', 'memory_embedding_model']);
+        const summaryModelName = configs.memory_summary_model || 'gemini-3-flash-preview';
+        const embeddingModelName = configs.memory_embedding_model || 'gemini-embedding-001';
+
+        // 1. Generate Summary using configured model
+        const summaryModel = genAI.getGenerativeModel({ model: summaryModelName });
 
         // Format conversation for the prompt
         let conversationText = messages.map(m => {
@@ -53,8 +59,8 @@ export async function POST(req: NextRequest) {
             throw new Error('Summary generation failed');
         }
 
-        // 2. Generate Vector Embedding using gemini-embedding-001
-        const embeddingModel = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
+        // 2. Generate Vector Embedding using configured embedding model
+        const embeddingModel = genAI.getGenerativeModel({ model: embeddingModelName });
         const embedResult = await embeddingModel.embedContent(summaryText);
         const embedding = embedResult.embedding.values; // Array of 768 floats
 

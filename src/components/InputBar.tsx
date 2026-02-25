@@ -1,5 +1,11 @@
 import { RefObject } from "react";
 
+interface ChatModelOption {
+    id: string;
+    label: string;
+    group: string;
+}
+
 interface InputBarProps {
     input: string;
     setInput: (value: string) => void;
@@ -9,6 +15,7 @@ interface InputBarProps {
     isThinking: boolean;
     model: string;
     setModel: (value: string) => void;
+    availableModels: ChatModelOption[];
     pendingImages: { data: string; mimeType: string }[];
     setPendingImages: React.Dispatch<React.SetStateAction<{ data: string; mimeType: string }[]>>;
     onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -24,6 +31,7 @@ export default function InputBar({
     isThinking,
     model,
     setModel,
+    availableModels,
     pendingImages,
     setPendingImages,
     onImageUpload,
@@ -115,20 +123,18 @@ export default function InputBar({
                             onChange={(e) => setModel(e.target.value)}
                             disabled={isLoading}
                         >
-                            <optgroup label="Gemini 3.x">
-                                <option value="gemini-3.1-pro-preview">3.1 Pro</option>
-                                <option value="gemini-3-pro-preview">3.0 Pro</option>
-                                <option value="gemini-3-flash-preview">3.0 Flash</option>
-                            </optgroup>
-                            <optgroup label="Gemini 2.5">
-                                <option value="gemini-2.5-pro">2.5 Pro</option>
-                                <option value="gemini-2.5-flash">2.5 Flash</option>
-                                <option value="gemini-2.5-flash-lite">2.5 Flash Lite</option>
-                            </optgroup>
-                            <optgroup label="Gemini 2.0">
-                                <option value="gemini-2.0-flash">2.0 Flash</option>
-                                <option value="gemini-2.0-flash-lite">2.0 Flash Lite</option>
-                            </optgroup>
+                            {(() => {
+                                const groups = new Map<string, ChatModelOption[]>();
+                                availableModels.forEach(m => {
+                                    if (!groups.has(m.group)) groups.set(m.group, []);
+                                    groups.get(m.group)!.push(m);
+                                });
+                                return Array.from(groups.entries()).map(([group, models]) => (
+                                    <optgroup key={group} label={group}>
+                                        {models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                                    </optgroup>
+                                ));
+                            })()}
                         </select>
                         {/* Status indicator */}
                         {isLoading && (
