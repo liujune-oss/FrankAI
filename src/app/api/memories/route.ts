@@ -20,8 +20,8 @@ export async function GET(req: NextRequest) {
         }
 
         const { data, error } = await supabaseAdmin
-            .from('user_vectors')
-            .select('id, content, created_at, metadata')
+            .from('memories_tier1')
+            .select('id, summary_text, created_at, session_id')
             .eq('user_id', authPayload.uid)
             .order('created_at', { ascending: false });
 
@@ -52,7 +52,7 @@ export async function DELETE(req: NextRequest) {
         if (body.clearAll) {
             // Delete all memories for this user
             const { error } = await supabaseAdmin
-                .from('user_vectors')
+                .from('memories_tier1')
                 .delete()
                 .eq('user_id', authPayload.uid);
             if (error) throw error;
@@ -60,7 +60,7 @@ export async function DELETE(req: NextRequest) {
         } else if (body.id) {
             // Delete specific memory
             const { error } = await supabaseAdmin
-                .from('user_vectors')
+                .from('memories_tier1')
                 .delete()
                 .eq('user_id', authPayload.uid)
                 .eq('id', body.id);
@@ -94,7 +94,7 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid request: ID and content are required' }, { status: 400 });
         }
 
-        // Re-vectorize the updated content
+        // Re-vectorize the updated content without dimension slicing for exact 3072 search DB
         const configs = await getConfigs(['memory_embedding_model']);
         const embeddingModelName = configs.memory_embedding_model || 'gemini-embedding-001';
 
@@ -102,16 +102,16 @@ export async function PUT(req: NextRequest) {
         const embedResult = await embeddingModel.embedContent(body.content);
         const embedding = embedResult.embedding.values;
 
-        // Update the database record
+        // Update the database record using the new schema
         const { data, error } = await supabaseAdmin
-            .from('user_vectors')
+            .from('memories_tier1')
             .update({
-                content: body.content,
+                summary_text: body.content,
                 embedding: embedding
             })
             .eq('id', body.id)
             .eq('user_id', authPayload.uid)
-            .select('id, content, created_at, metadata');
+            .select('id, summary_text, created_at, session_id');
 
         if (error) throw error;
 

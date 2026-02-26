@@ -3,9 +3,9 @@ import { useAuth } from './useAuth';
 
 export interface Memory {
     id: string;
-    content: string;
+    summary_text: string;
     created_at: string;
-    metadata?: any;
+    session_id?: string;
 }
 
 export function useMemories() {

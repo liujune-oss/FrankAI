@@ -25,7 +25,7 @@ export default function MemoryManager({ open, onClose }: MemoryManagerProps) {
 
     const handleEditClick = (memory: Memory) => {
         setEditingId(memory.id);
-        setEditContent(memory.content);
+        setEditContent(memory.summary_text);
     };
 
     const handleCancelEdit = () => {
@@ -113,6 +113,12 @@ export default function MemoryManager({ open, onClose }: MemoryManagerProps) {
                                                 hour: "2-digit", minute: "2-digit"
                                             })}
                                         </div>
+                                        {memory.session_id && (
+                                            <div className="text-xs text-muted-foreground font-mono bg-blue-500/10 px-2 py-0.5 rounded-md truncate max-w-[120px] sm:max-w-[200px]" title={`关联会话 ID: ${memory.session_id}`}>
+                                                关联: {memory.session_id.substring(0, 8)}...
+                                            </div>
+                                        )}
+                                        <div className="flex-1" />
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                             {editingId !== memory.id && (
                                                 <>
@@ -144,7 +150,7 @@ export default function MemoryManager({ open, onClose }: MemoryManagerProps) {
                                                 </button>
                                                 <button
                                                     onClick={() => handleSaveEdit(memory.id)}
-                                                    disabled={isUpdating || !editContent.trim() || editContent === memory.content}
+                                                    disabled={isUpdating || !editContent.trim() || editContent === memory.summary_text}
                                                     className="px-4 py-1.5 text-sm bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
                                                 >
                                                     {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -158,7 +164,7 @@ export default function MemoryManager({ open, onClose }: MemoryManagerProps) {
                                         </div>
                                     ) : (
                                         <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                                            {memory.content}
+                                            {memory.summary_text}
                                         </div>
                                     )}
                                 </div>

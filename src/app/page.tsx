@@ -97,13 +97,13 @@ export default function ChatPage() {
     });
 
     try {
-      const res = await fetch('/api/vectorize', {
+      const res = await fetch('/api/memory/sync', {
         method: 'POST',
         headers: {
           ...auth.getAuthHeaders(),
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ conv_id: convId, messages: targetConv.messages })
+        body: JSON.stringify({ conv_id: convId })
       });
       const data = await res.json();
       if (res.ok) {
