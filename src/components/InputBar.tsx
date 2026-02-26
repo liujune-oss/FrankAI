@@ -113,12 +113,12 @@ export default function InputBar({
                 />
                 {/* Bottom toolbar */}
                 <div className="flex items-center justify-between px-3 pb-2.5">
-                    <div className="flex items-center space-x-1.5">
+                    <div className="flex items-center space-x-1.5 flex-1 min-w-0">
                         {/* Image upload button */}
                         <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="p-1.5 rounded-full hover:bg-background/80 text-muted-foreground hover:text-foreground transition-colors"
+                            className="p-1.5 rounded-full hover:bg-background/80 text-muted-foreground hover:text-foreground transition-colors shrink-0"
                             title="上传图片"
                             disabled={isLoading}
                         >
@@ -126,7 +126,7 @@ export default function InputBar({
                         </button>
                         {/* Model selector badge */}
                         <select
-                            className="appearance-none cursor-pointer text-[11px] text-muted-foreground bg-background/80 border border-input rounded-full pl-2.5 pr-5 py-0.5 outline-none hover:bg-muted transition-colors"
+                            className="appearance-none cursor-pointer text-[11px] text-muted-foreground bg-background/80 border border-input rounded-full pl-2.5 pr-5 py-0.5 outline-none hover:bg-muted transition-colors max-w-[120px] sm:max-w-[180px] truncate"
                             style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center' }}
                             value={model}
                             onChange={(e) => setModel(e.target.value)}
@@ -147,13 +147,13 @@ export default function InputBar({
                         </select>
                         {/* Status indicator */}
                         {isLoading && (
-                            <span className="inline-flex items-center space-x-1 text-[11px] text-amber-500 px-1">
+                            <span className="inline-flex items-center space-x-1 text-[11px] text-amber-500 px-1 shrink-0">
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
                                 <span>{isThinking ? '思考中' : '回复中'}</span>
                             </span>
                         )}
                     </div>
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-1 shrink-0 flex-none ml-2">
                         {isLoading ? (
                             <button
                                 type="submit"
