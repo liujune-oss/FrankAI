@@ -67,8 +67,8 @@
 
 ### 4. 持续记忆 RAG (`/api/vectorize` + `/api/chat`)
 - RAG 双向流传：`/api/vectorize` 用 `gemini-3-flash-preview` 提取总结事实，用 `gemini-embedding-001` 转为 3072 维向量
-- 储存机制：写入 Supabase `user_vectors`
-- 检索分级：鉴于 3072 维超限不支持 HNSW 索引，降级使用 KNN 暴力距离扫描匹配 (Cosine Threshold: 0.4)
+- 储存机制：写入 Supabase `user_vectors` 和 `memories_tier1`
+- 检索分级：鉴于 3072 维超限无法建立 HNSW 和 IVFFlat 索引（pgvector 限制 2000 维），采用全表 KNN 暴力精确扫描 (`Exact Nearest Neighbor Search`) 保证 100% 召回率 (Cosine Threshold: 0.4)
 - 提取融合：用户提问时，`/api/chat` 先查 RAG 后并入 System prompt
 
 ### 5. 会话管理 (`lib/conversations.ts`)
@@ -122,6 +122,8 @@ gemini-chat-pwa/
 │   │       └── admin/            # 管理后台 API
 │   │           ├── config/route.ts   # 配置读写
 │   │           ├── models/route.ts   # 模型列表
+│   │           ├── chat_logs/route.ts# 聊天日志（无 FK 约束下手动内存映射 user_id）
+│   │           ├── memories/route.ts # 记忆库查询（同上，绕过 PostgREST 联合查询限制）
 │   │           └── users/route.ts    # 用户管理
 │   ├── components/
 │   │   ├── ActivationGate.tsx    # 激活码输入界面
