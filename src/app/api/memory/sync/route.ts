@@ -47,6 +47,10 @@ export async function POST(req: NextRequest) {
             };
         });
 
+        // Delete existing tracked data for this session to allow overwriting with new context
+        await supabaseAdmin.from('memories_tier1').delete().eq('user_id', authPayload.uid).eq('session_id', session_id);
+        await supabaseAdmin.from('chat_messages').delete().eq('user_id', authPayload.uid).eq('session_id', session_id);
+
         // Insert messages into raw chat logs
         const { data: insertedMessages, error: insertError } = await supabaseAdmin
             .from('chat_messages')

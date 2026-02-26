@@ -103,7 +103,7 @@ export default function ChatPage() {
           ...auth.getAuthHeaders(),
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ conv_id: convId })
+        body: JSON.stringify({ session_id: convId, messages: targetConv.messages })
       });
       const data = await res.json();
       if (res.ok) {
