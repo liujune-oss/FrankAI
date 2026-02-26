@@ -135,7 +135,7 @@ export default function ChatPage() {
   }
 
   return (
-    <main className="flex flex-col h-[100dvh] bg-background w-full max-w-4xl mx-auto shadow-sm pb-[env(safe-area-inset-bottom)] relative overflow-hidden">
+    <main className="flex flex-col h-[100dvh] bg-background w-full md:max-w-4xl mx-auto shadow-sm pb-[env(safe-area-inset-bottom)] relative overflow-hidden">
       <ConversationDrawer
         open={conv.drawerOpen}
         onClose={() => conv.setDrawerOpen(false)}
@@ -187,8 +187,8 @@ export default function ChatPage() {
 
       {/* Toast Notification */}
       {toast && (
-        <div className="absolute top-4 sm:top-auto sm:bottom-24 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-5 sm:slide-in-from-bottom-10 duration-300">
-          <div className={`px-4 py-3 rounded-full shadow-lg backdrop-blur-md border border-white/10 text-sm font-medium flex items-center gap-2 ${toast.type === 'success' ? 'bg-green-500/90 text-white' :
+        <div className="absolute top-4 sm:top-auto sm:bottom-24 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-5 sm:slide-in-from-bottom-10 duration-300 pointer-events-none">
+          <div className={`mx-auto w-fit max-w-[90%] px-4 py-3 rounded-full shadow-lg backdrop-blur-md border border-white/10 text-sm font-medium flex items-center gap-2 pointer-events-auto ${toast.type === 'success' ? 'bg-green-500/90 text-white' :
             toast.type === 'error' ? 'bg-red-500/90 text-white' :
               'bg-zinc-800/90 text-white'
             }`}>
