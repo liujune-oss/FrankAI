@@ -44,6 +44,7 @@ export default function ChatPage() {
 
   // ── Chat stream ──
   const chat = useChatStream({
+    conversationId: conv.activeConv?.id,
     messages: conv.messages,
     setMessages: conv.setMessages,
     saveMessages: conv.saveMessages,

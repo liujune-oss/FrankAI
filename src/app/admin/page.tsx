@@ -53,7 +53,7 @@ export default function AdminDashboard() {
     const [newUsername, setNewUsername] = useState('');
     const [newMaxUses, setNewMaxUses] = useState(3);
     const [isCreating, setIsCreating] = useState(false);
-    const [activeTab, setActiveTab] = useState<'users' | 'models' | 'memories'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'models' | 'memories' | 'chat_logs'>('users');
 
     // Model config states
     const [chatModels, setChatModels] = useState<ChatModel[]>([]);
@@ -78,10 +78,16 @@ export default function AdminDashboard() {
     const [memoriesLoading, setMemoriesLoading] = useState(false);
     const [expandedMemoryUsers, setExpandedMemoryUsers] = useState<Set<string>>(new Set());
 
+    // Admin Chat Logs states
+    const [adminChatLogs, setAdminChatLogs] = useState<any[]>([]);
+    const [chatLogsLoading, setChatLogsLoading] = useState(false);
+    const [expandedChatLogUsers, setExpandedChatLogUsers] = useState<Set<string>>(new Set());
+
     useEffect(() => {
         if (activeTab === 'users') fetchUsers();
         if (activeTab === 'models') fetchConfig();
         if (activeTab === 'memories') fetchAdminMemories();
+        if (activeTab === 'chat_logs') fetchAdminChatLogs();
     }, [activeTab]);
 
     const fetchUsers = async () => {
@@ -168,6 +174,27 @@ export default function AdminDashboard() {
         }
     };
 
+    const fetchAdminChatLogs = async () => {
+        try {
+            setChatLogsLoading(true);
+            const res = await fetch('/api/admin/chat_logs');
+            if (res.status === 401) {
+                router.push('/admin/login');
+                return;
+            }
+            const data = await res.json();
+            if (data.success) {
+                setAdminChatLogs(data.messages || []);
+            } else {
+                setError(data.error);
+            }
+        } catch (err) {
+            setError('Failed to fetch chat logs');
+        } finally {
+            setChatLogsLoading(false);
+        }
+    };
+
     const handleDeleteMemory = async (id: string) => {
         if (!confirm('确定要强制删除该条记忆吗？')) return;
         try {
@@ -198,6 +225,15 @@ export default function AdminDashboard() {
 
     const toggleMemoryUserExpanded = (userId: string) => {
         setExpandedMemoryUsers(prev => {
+            const next = new Set(prev);
+            if (next.has(userId)) next.delete(userId);
+            else next.add(userId);
+            return next;
+        });
+    };
+
+    const toggleChatLogUserExpanded = (userId: string) => {
+        setExpandedChatLogUsers(prev => {
             const next = new Set(prev);
             if (next.has(userId)) next.delete(userId);
             else next.add(userId);
@@ -369,6 +405,7 @@ export default function AdminDashboard() {
                             if (activeTab === 'users') fetchUsers();
                             if (activeTab === 'models') fetchConfig();
                             if (activeTab === 'memories') fetchAdminMemories();
+                            if (activeTab === 'chat_logs') fetchAdminChatLogs();
                         }} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
                             <RefreshCw className="w-5 h-5" />
                         </button>
@@ -411,7 +448,16 @@ export default function AdminDashboard() {
                             : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                             }`}
                     >
-                        <BrainCircuit className="w-4 h-4" /> 记忆池管理
+                        <BrainCircuit className="w-4 h-4" /> 记忆碎片
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('chat_logs')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'chat_logs'
+                            ? 'text-orange-600 border-b-2 border-orange-600 bg-orange-50/50 dark:bg-orange-900/10 dark:text-orange-400'
+                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                            }`}
+                    >
+                        <MonitorSmartphone className="w-4 h-4" /> 原始聊天记录
                     </button>
                 </div>
 
@@ -792,7 +838,7 @@ export default function AdminDashboard() {
                                                     <div className="p-4 sm:p-6 bg-gray-50/50 dark:bg-gray-900/20 border-t border-gray-100 dark:border-gray-700 space-y-4">
                                                         {userGroup.memories.map((memory: any) => (
                                                             <div key={memory.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm relative group">
-                                                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                                                                     <button
                                                                         onClick={() => handleDeleteMemory(memory.id)}
                                                                         className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-800/50"
@@ -802,13 +848,24 @@ export default function AdminDashboard() {
                                                                     </button>
                                                                 </div>
 
-                                                                <div className="pr-10 text-sm text-gray-700 dark:text-gray-300 font-mono leading-relaxed whitespace-pre-wrap break-all relative">
-                                                                    {memory.content}
-                                                                </div>
-
-                                                                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 text-xs text-gray-400 flex items-center justify-between">
-                                                                    <span className="font-mono">{new Date(memory.created_at).toLocaleString()}</span>
-                                                                    <span className="font-mono text-[10px] opacity-40">Data ID: {memory.id}</span>
+                                                                <div className="pr-20">
+                                                                    <div className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed font-medium">
+                                                                        <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-[10px] px-2 py-0.5 rounded mr-2 font-mono align-middle uppercase">
+                                                                            Tier 1 Summary
+                                                                        </span>
+                                                                        {memory.summary_text}
+                                                                    </div>
+                                                                    <div className="flex flex-wrap items-center mt-3 gap-3 text-xs text-gray-500 font-mono">
+                                                                        <span>{new Date(memory.created_at).toLocaleString()}</span>
+                                                                        <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+                                                                        <span className="truncate w-16" title={memory.id}>Mem ID: {memory.id.substring(0, 8)}</span>
+                                                                        {memory.session_id && (
+                                                                            <>
+                                                                                <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+                                                                                <span className="truncate text-emerald-600 dark:text-emerald-400" title={memory.session_id}>Session: {memory.session_id}</span>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -822,6 +879,78 @@ export default function AdminDashboard() {
                         )}
                     </section>
                 )}
+                {activeTab === 'chat_logs' && (
+                    <section className="space-y-6">
+                        <div className="flex items-center justify-between px-2">
+                            <h2 className="text-xl font-bold flex items-center gap-2"><MonitorSmartphone className="w-5 h-5 text-orange-500" /> 用户原始聊天记录</h2>
+                        </div>
+
+                        {chatLogsLoading ? (
+                            <div className="flex justify-center py-8 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                                <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
+                            </div>
+                        ) : adminChatLogs.length === 0 ? (
+                            <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 border-dashed">
+                                <MonitorSmartphone className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">暂无任何聊天记录</h3>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-6">
+                                {(() => {
+                                    // Group logs by user
+                                    const logsByUser = adminChatLogs.reduce((acc, log) => {
+                                        if (!acc[log.user_id]) acc[log.user_id] = { username: log.username, logs: [] };
+                                        acc[log.user_id].logs.push(log);
+                                        return acc;
+                                    }, {} as Record<string, { username: string, logs: any[] }>);
+
+                                    return Object.entries(logsByUser).map(([userId, userGroup]: [string, any]) => {
+                                        const isExpanded = expandedChatLogUsers.has(userId);
+                                        return (
+                                            <div key={userId} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                <div onClick={() => toggleChatLogUserExpanded(userId)} className="flex justify-between items-center p-4 sm:p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors border-b border-transparent">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="p-2.5 bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400 rounded-xl">
+                                                            <Users className="w-5 h-5" />
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-lg font-bold flex items-center gap-2">
+                                                                {userGroup.username}
+                                                                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700">{userGroup.logs.length} 条消息</span>
+                                                            </div>
+                                                            <div className="text-xs text-gray-500 font-mono mt-1 opacity-70">ID: {userId}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400">
+                                                        {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                                                    </div>
+                                                </div>
+
+                                                {isExpanded && (
+                                                    <div className="p-4 sm:p-6 bg-gray-50/50 dark:bg-gray-900/20 border-t border-gray-100 dark:border-gray-700 space-y-4 max-h-[600px] overflow-y-auto">
+                                                        {userGroup.logs.map((log: any) => (
+                                                            <div key={log.id} className={`p-4 rounded-xl border max-w-[85%] ${log.role === 'user' ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30 ml-auto' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 mr-auto'}`}>
+                                                                <div className="flex items-center gap-2 mb-2">
+                                                                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${log.role === 'user' ? 'text-blue-700 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/40' : 'text-purple-700 bg-purple-100 dark:text-purple-400 dark:bg-purple-900/40'}`}>
+                                                                        {log.role}
+                                                                    </span>
+                                                                    <span className="text-xs text-gray-400 font-mono">{new Date(log.created_at).toLocaleString()}</span>
+                                                                    {log.session_id && <span className="text-[10px] text-gray-400 ml-auto truncate w-16" title={log.session_id}>S: {log.session_id.substring(0, 6)}</span>}
+                                                                </div>
+                                                                <div className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{log.content}</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        )}
+                    </section>
+                )}
+
             </div>
         </div>
     );

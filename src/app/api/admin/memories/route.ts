@@ -15,31 +15,41 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized Admin' }, { status: 401 });
         }
 
-        // Fetch memories with user info
-        const { data, error } = await supabaseAdmin
-            .from('user_vectors')
-            .select(`
-                id,
-                content,
-                created_at,
-                metadata,
-                user_id,
-                users (
-                    username
-                )
-            `)
+        // Fetch memories WITHOUT implicit user info join since FK was removed
+        const { data: memoriesData, error: memoriesError } = await supabaseAdmin
+            .from('memories_tier1')
+            .select('*')
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (memoriesError) throw memoriesError;
+
+        // Fetch user mapping manually
+        const userIds = [...new Set(memoriesData.map((m: any) => m.user_id).filter(Boolean))];
+        let userMap: Record<string, string> = {};
+
+        if (userIds.length > 0) {
+            const { data: usersData } = await supabaseAdmin
+                .from('users')
+                .select('id, username')
+                .in('id', userIds);
+
+            if (usersData) {
+                usersData.forEach((u: any) => {
+                    userMap[u.id] = u.username;
+                });
+            }
+        }
 
         // Format the return data
-        const formattedData = data.map((row: any) => ({
+        const formattedData = memoriesData.map((row: any) => ({
             id: row.id,
             user_id: row.user_id,
-            username: row.users?.username || 'Unknown',
-            content: row.content,
-            created_at: row.created_at,
-            metadata: row.metadata
+            session_id: row.session_id,
+            username: userMap[row.user_id] || 'Unknown',
+            summary_text: row.summary_text,
+            start_message_id: row.start_message_id,
+            end_message_id: row.end_message_id,
+            created_at: row.created_at
         }));
 
         return NextResponse.json({ success: true, memories: formattedData });
@@ -67,7 +77,7 @@ export async function DELETE(req: NextRequest) {
         if (body.clear_user_id) {
             // Clear all memories for a specific user
             const { error } = await supabaseAdmin
-                .from('user_vectors')
+                .from('memories_tier1')
                 .delete()
                 .eq('user_id', body.clear_user_id);
             if (error) throw error;
@@ -76,7 +86,7 @@ export async function DELETE(req: NextRequest) {
         } else if (body.id) {
             // Delete specific memory
             const { error } = await supabaseAdmin
-                .from('user_vectors')
+                .from('memories_tier1')
                 .delete()
                 .eq('id', body.id);
             if (error) throw error;

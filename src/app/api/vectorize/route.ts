@@ -59,10 +59,11 @@ export async function POST(req: NextRequest) {
             throw new Error('Summary generation failed');
         }
 
-        // 2. Generate Vector Embedding using configured embedding model
+        // 2. Generate Vector Embedding using standard 768 dimensions
         const embeddingModel = genAI.getGenerativeModel({ model: embeddingModelName });
         const embedResult = await embeddingModel.embedContent(summaryText);
-        const embedding = embedResult.embedding.values; // Array of 768 floats
+
+        const embedding = embedResult.embedding.values;
 
         // 3. Store in Supabase pgvector
         const { error } = await supabaseAdmin

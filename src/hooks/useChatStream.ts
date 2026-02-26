@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { ChatMessage } from "@/types/chat";
 
 interface UseChatStreamOptions {
+    conversationId?: string;
     messages: ChatMessage[];
     setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
     saveMessages: (msgs: ChatMessage[]) => Promise<void>;
@@ -14,6 +15,7 @@ interface UseChatStreamOptions {
 }
 
 export function useChatStream({
+    conversationId,
     messages,
     setMessages,
     saveMessages,
@@ -30,6 +32,60 @@ export function useChatStream({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isImageGenerating, setIsImageGenerating] = useState(false);
     const [pendingImages, setPendingImages] = useState<{ data: string; mimeType: string }[]>([]);
+
+    const lastSummarizedCount = useRef(0);
+    const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    const triggerSummarize = useCallback(async (currentMessages: ChatMessage[]) => {
+        if (!conversationId || currentMessages.length <= lastSummarizedCount.current) return;
+
+        const messagesToSummarize = currentMessages.slice(lastSummarizedCount.current);
+        if (messagesToSummarize.length === 0) return;
+
+        try {
+            const res = await fetch('/api/memory/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({
+                    session_id: conversationId,
+                    messages: messagesToSummarize
+                })
+            });
+            if (res.ok) {
+                lastSummarizedCount.current = currentMessages.length;
+            }
+        } catch (e) {
+            console.error("Failed to sync memory", e);
+        }
+    }, [conversationId, getAuthHeaders]);
+
+    // Reset when conversation changes
+    useEffect(() => {
+        lastSummarizedCount.current = 0;
+    }, [conversationId]);
+
+    // Idle & Threshold watcher
+    useEffect(() => {
+        if (messages.length === 0 || isLoading) return;
+
+        if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+
+        // 20 messages threshold (approx 10 turns)
+        const unsyncedCount = messages.length - lastSummarizedCount.current;
+        if (unsyncedCount >= 20) {
+            triggerSummarize(messages);
+            return;
+        }
+
+        // 1 minute idle
+        idleTimerRef.current = setTimeout(() => {
+            triggerSummarize(messages);
+        }, 60000);
+
+        return () => {
+            if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+        };
+    }, [messages, isLoading, triggerSummarize]);
 
     const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -115,7 +171,23 @@ export function useChatStream({
                     handleUnauthorized();
                     return;
                 }
-                throw new Error(`HTTP Error: ${response.status}`);
+
+                // Try parsing backend JSON error to surface exact Gemini exceptions
+                let backendMsg = `HTTP Error: ${response.status}`;
+                try {
+                    const errPayload = await response.json();
+                    if (errPayload && errPayload.error) {
+                        backendMsg = errPayload.error;
+                    }
+                } catch (e) {
+                    // Fallback to reading text if not JSON
+                    try {
+                        const errText = await response.text();
+                        if (errText) backendMsg = errText;
+                    } catch (e2) { }
+                }
+
+                throw new Error(backendMsg);
             }
 
             const reader = response.body?.getReader();

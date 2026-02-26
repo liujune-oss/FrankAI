@@ -49,28 +49,67 @@ export async function POST(req: Request) {
                 const embedResult = await embeddingModel.embedContent(queryText);
                 const embedding = embedResult.embedding.values;
 
-                const { data: matchedMemories, error } = await supabaseAdmin.rpc('match_user_vectors', {
+                // Tier-1: Macro semantic search among summarized chunks
+                const { data: matchedMemories, error } = await supabaseAdmin.rpc('match_tier1_memories', {
                     query_embedding: embedding,
-                    match_threshold: 0.4, // Return items that are moderately related
-                    match_count: 5,
+                    match_threshold: 0.5, // Return highly pertinent items
+                    match_count: 3,
                     p_user_id: authPayload.uid
                 });
-                console.log("RAG Search Error:", error);
-                console.log("RAG Match Results:", matchedMemories);
-                appendLog("RAG Error: " + error);
-                appendLog("RAG Matches: " + JSON.stringify(matchedMemories));
+
+                if (error) {
+                    console.error("Tier-1 Memory Search Error:", error);
+                    appendLog("Tier-1 Memory Error: " + error);
+                }
 
                 if (!error && matchedMemories && matchedMemories.length > 0) {
-                    const memoriesText = matchedMemories.map((m: any) => m.content).join('\n- ');
-                    finalSystemInstruction = `[Relevant User Context/Memories (Use this info implicitly if relevant to the request)]:\n- ${memoriesText}\n\n---\n\n` + finalSystemInstruction;
-                    appendLog("Appended to instruction.");
+                    let memoryXml = '<retrieved_memories>\n  <!-- 经过二级滑窗检索，核心命中的历史对白片段 -->\n';
+
+                    // Tier-2: Micro sliding window context extraction
+                    for (const memory of matchedMemories) {
+                        try {
+                            // Find the time boundaries of the chunk
+                            const { data: startMsg } = await supabaseAdmin.from('chat_messages').select('created_at').eq('id', memory.start_message_id).single();
+                            const { data: endMsg } = await supabaseAdmin.from('chat_messages').select('created_at').eq('id', memory.end_message_id).single();
+
+                            if (startMsg && endMsg) {
+                                // Fetch the sliding window context for this chunk
+                                const { data: chunkMsgs } = await supabaseAdmin.from('chat_messages')
+                                    .select('role, content, created_at')
+                                    .eq('session_id', memory.session_id)
+                                    .gte('created_at', startMsg.created_at)
+                                    .lte('created_at', endMsg.created_at)
+                                    .order('created_at', { ascending: true });
+
+                                if (chunkMsgs && chunkMsgs.length > 0) {
+                                    memoryXml += `  <memory_chunk session_id="${memory.session_id}" timestamp="${chunkMsgs[0].created_at}">\n`;
+                                    memoryXml += `    <!-- Summary abstraction: ${memory.summary_text} -->\n`;
+                                    for (const msg of chunkMsgs) {
+                                        memoryXml += `    [${msg.role === 'user' ? 'User' : 'Assistant'}]: ${msg.content}\n`;
+                                    }
+                                    memoryXml += `  </memory_chunk>\n`;
+                                }
+                            }
+                        } catch (e) {
+                            console.error("Tier-2 Extract Context Error For Mem:", memory.id, e);
+                        }
+                    }
+                    memoryXml += '</retrieved_memories>\n\n';
+
+                    // Isolate the domains by formatting standard prompt into XML 
+                    finalSystemInstruction = `<system_instructions>\n${finalSystemInstruction}\n</system_instructions>\n\n${memoryXml}<current_conversation_context>\n<!-- 当前的会话历史记录 -->\n</current_conversation_context>\n`;
+                    appendLog("Appended 2-Tier memory to instruction.");
                 } else {
-                    appendLog("Did not append. Length: " + (matchedMemories?.length || 0));
+                    appendLog("Did not append. No 2-Tier matches found.");
+                    finalSystemInstruction = `<system_instructions>\n${finalSystemInstruction}\n</system_instructions>\n\n<current_conversation_context>\n</current_conversation_context>\n`;
                 }
             } catch (err) {
-                console.error('RAG Retrieval Error:', err);
-                appendLog("RAG Catch Error: " + err);
+                console.error('2-Tier RAG Retrieval Error:', err);
+                appendLog("2-Tier Catch Error: " + err);
             }
+        } else {
+            // Apply standard tags if no queryText extraction or DB
+            finalSystemInstruction = `<system_instructions>\n${finalSystemInstruction}\n</system_instructions>\n\n<current_conversation_context>\n</current_conversation_context>\n`;
         }
 
         // Convert messages: map image parts for the AI SDK format
@@ -103,6 +142,15 @@ export async function POST(req: Request) {
 
         const isLikelyEdit = lastUserContent.includes('修改') || lastUserContent.includes('换成') || lastUserContent.includes('改') || lastUserContent.includes('edit');
 
+        // Only send thinkingConfig if the model is capable (typically 2.0-flash-thinking, 2.5-pro, etc. But NOT deep-research)
+        // We'll allow anything with 'thinking' in the name or the specific gemini 3.x/2.5 pro models that we know support it.
+        const supportsThinking = model.includes('thinking') || model.includes('gemini-3') || model.includes('gemini-2.5-pro') || model.includes('gemini-2.0-pro');
+        const providerOptions = supportsThinking ? {
+            google: {
+                thinkingConfig: { thinkingBudget: 1024 },
+            }
+        } : undefined;
+
         const result = await streamText({
             model: google(model),
             system: finalSystemInstruction,
@@ -118,11 +166,7 @@ export async function POST(req: Request) {
                     }),
                 },
             },
-            providerOptions: {
-                google: {
-                    thinkingConfig: { thinkingBudget: 1024 },
-                }
-            },
+            providerOptions,
         });
 
         return result.toUIMessageStreamResponse({
@@ -131,8 +175,13 @@ export async function POST(req: Request) {
                 return String(error?.message || error);
             }
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('API Error:', error);
-        return new Response('Internal Server Error', { status: 500 });
+        // Extract the underlying message if ai sdk throws immediately (e.g. Interactions API requirement)
+        const errorMessage = error?.message || 'Internal Server Error';
+        return new Response(JSON.stringify({ error: errorMessage }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 }
