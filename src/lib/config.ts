@@ -16,6 +16,7 @@ const DEFAULT_CONFIGS: Record<string, any> = {
     memory_summary_model: 'gemini-3-flash-preview',
     memory_embedding_model: 'gemini-embedding-001',
     image_gen_model: 'gemini-2.5-flash-image',
+    voice_model: 'gemini-3-flash-preview',
 };
 
 let tableEnsured = false;

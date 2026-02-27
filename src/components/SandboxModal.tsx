@@ -84,7 +84,7 @@ export default function SandboxModal({ open, onClose }: SandboxModalProps) {
             return;
         }
         setIsLoading(true);
-        setResult("正在向原生 Gemini 1.5 Pro 发送音频流进行解码与提炼...");
+        setResult("正在向原生 Gemini 3.0 Flash 发送音频流进行解码与提炼...");
         try {
             const res = await fetch('/api/admin/voice-test', {
                 method: 'POST',
@@ -141,8 +141,8 @@ export default function SandboxModal({ open, onClose }: SandboxModalProps) {
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`w-auto md:w-full flex-shrink-0 flex items-center gap-2 md:gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive
-                                            ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
-                                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
                                         }`}
                                 >
                                     <Icon size={16} className="shrink-0" />
@@ -159,7 +159,7 @@ export default function SandboxModal({ open, onClose }: SandboxModalProps) {
                                 <div>
                                     <h3 className="text-lg font-medium text-foreground flex items-center gap-2">
                                         <Mic size={18} className="text-purple-500" />
-                                        原生音频大模型接入点 (Gemini 1.5 Pro)
+                                        原生音频大模型接入点 (Gemini 3.0 Flash)
                                     </h3>
                                     <p className="text-sm text-muted-foreground mt-1">
                                         直接调用浏览器原生麦克风，录制二进制音频流直接喂给大模型引擎测试转化效果。

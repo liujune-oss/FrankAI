@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+import { getConfig } from '@/lib/config';
+
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
 
 export async function POST(req: NextRequest) {
@@ -11,7 +13,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Missing audio data' }, { status: 400 });
         }
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+        const modelName = await getConfig<string>('voice_model') || 'gemini-3-flash-preview';
+        const model = genAI.getGenerativeModel({ model: modelName });
 
         const parts = [
             { text: prompt || "请将以下语音内容提取为清晰、专业的文字笔记，并去除废话和语气词。" },
