@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Conversation } from "@/lib/conversations";
 import versionData from "../../version.json";
+import { Beaker } from "lucide-react";
 
 interface ConversationDrawerProps {
     open: boolean;
@@ -18,6 +19,8 @@ interface ConversationDrawerProps {
     setSystemInstruction: (value: string) => void;
     defaultSystemInstruction: string;
     pushSystemInstruction: (value: string) => Promise<void>;
+    isAdmin: boolean;
+    onOpenSandbox: () => void;
 }
 
 export default function ConversationDrawer({
@@ -36,6 +39,8 @@ export default function ConversationDrawer({
     setSystemInstruction,
     defaultSystemInstruction,
     pushSystemInstruction,
+    isAdmin,
+    onOpenSandbox,
 }: ConversationDrawerProps) {
     const [showSystemInstruction, setShowSystemInstruction] = useState(false);
 
@@ -188,6 +193,22 @@ export default function ConversationDrawer({
                         记忆管理
                     </button>
                 </div>
+
+                {/* AI Sandbox (Admin Only) */}
+                {isAdmin && (
+                    <div className="px-3 py-2 border-t">
+                        <button
+                            onClick={() => {
+                                onClose();
+                                onOpenSandbox();
+                            }}
+                            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 rounded-lg transition-colors border border-purple-500/20 font-semibold"
+                        >
+                            <Beaker size={14} />
+                            技能靶场
+                        </button>
+                    </div>
+                )}
 
                 {/* Clear all */}
                 {conversations.length > 1 && (
