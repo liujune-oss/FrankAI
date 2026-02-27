@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, KeyRound, MonitorSmartphone, Ban, ShieldCheck, LogOut, Loader2, RefreshCw, Settings, Cpu, Plus, Trash2, Save, Download, BrainCircuit, ChevronDown, ChevronRight } from 'lucide-react';
+import { Users, KeyRound, MonitorSmartphone, Ban, ShieldCheck, LogOut, Loader2, RefreshCw, Settings, Cpu, Plus, Trash2, Save, Download, BrainCircuit, ChevronDown, ChevronRight, Beaker } from 'lucide-react';
 
 type ChatModel = {
     id: string;
@@ -55,23 +55,28 @@ export default function AdminDashboard() {
     const [isCreating, setIsCreating] = useState(false);
     const [activeTab, setActiveTab] = useState<'users' | 'models' | 'memories' | 'chat_logs'>('users');
 
+    // Local toggles
+    const [sandboxEnabled, setSandboxEnabled] = useState(false);
+
     // Model config states
     const [chatModels, setChatModels] = useState<ChatModel[]>([]);
     const [defaultChatModel, setDefaultChatModel] = useState('');
     const [memorySummaryModel, setMemorySummaryModel] = useState('');
     const [memoryEmbeddingModel, setMemoryEmbeddingModel] = useState('');
     const [imageGenModel, setImageGenModel] = useState('');
-    const [configLoading, setConfigLoading] = useState(false);
+    const [configLoading, setConfigLoading] = useState(true);
     const [configSaving, setConfigSaving] = useState(false);
     const [configDirty, setConfigDirty] = useState(false);
-    const [apiModels, setApiModels] = useState<ApiModel[]>([]);
-    const [fetchingModels, setFetchingModels] = useState(false);
-    const [showApiModels, setShowApiModels] = useState(false);
 
-    // New model form
+    // New Model forms
     const [newModelId, setNewModelId] = useState('');
     const [newModelLabel, setNewModelLabel] = useState('');
     const [newModelGroup, setNewModelGroup] = useState('');
+
+    // Existing API Models list
+    const [apiModels, setApiModels] = useState<ApiModel[]>([]);
+    const [showApiModels, setShowApiModels] = useState(false);
+    const [fetchingModels, setFetchingModels] = useState(false);
 
     // Admin Memories states
     const [adminMemories, setAdminMemories] = useState<any[]>([]);
@@ -82,6 +87,12 @@ export default function AdminDashboard() {
     const [adminChatLogs, setAdminChatLogs] = useState<any[]>([]);
     const [chatLogsLoading, setChatLogsLoading] = useState(false);
     const [expandedChatLogUsers, setExpandedChatLogUsers] = useState<Set<string>>(new Set());
+
+    useEffect(() => {
+        setSandboxEnabled(localStorage.getItem('sandbox_enabled') === 'true');
+        fetchUsers();
+        fetchConfig();
+    }, []);
 
     useEffect(() => {
         if (activeTab === 'users') fetchUsers();
@@ -378,6 +389,12 @@ export default function AdminDashboard() {
         }
     };
 
+    const toggleSandbox = () => {
+        const next = !sandboxEnabled;
+        setSandboxEnabled(next);
+        localStorage.setItem('sandbox_enabled', String(next));
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
@@ -401,6 +418,16 @@ export default function AdminDashboard() {
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
+                        <button
+                            onClick={toggleSandbox}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors border ${sandboxEnabled
+                                ? 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800'
+                                : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700 dark:hover:bg-gray-800'
+                                }`}
+                        >
+                            <Beaker className="w-4 h-4" />
+                            {sandboxEnabled ? 'Sandbox: ON' : 'Sandbox: OFF'}
+                        </button>
                         <button onClick={() => {
                             if (activeTab === 'users') fetchUsers();
                             if (activeTab === 'models') fetchConfig();

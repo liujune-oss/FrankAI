@@ -10,6 +10,7 @@ import ConversationDrawer from "@/components/ConversationDrawer";
 import MessageList from "@/components/MessageList";
 import InputBar from "@/components/InputBar";
 import MemoryManager from "@/components/MemoryManager";
+import SandboxModal from "@/components/SandboxModal";
 
 const DEFAULT_MODELS = [
   { id: 'gemini-3.1-pro-preview', label: '3.1 Pro', group: 'Gemini 3.x' },
@@ -35,6 +36,20 @@ export default function ChatPage() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isSandboxOpen, setIsSandboxOpen] = useState(false);
+
+  useEffect(() => {
+    if (localStorage.getItem('sandbox_enabled') === 'true') {
+      setIsAdmin(true);
+    }
+    fetch('/api/admin/check')
+      .then(res => {
+        if (res.ok) setIsAdmin(true);
+      })
+      .catch(() => { });
+  }, []);
 
   // ── Auth & activation ──
   const auth = useAuth();
@@ -153,6 +168,8 @@ export default function ChatPage() {
         setSystemInstruction={auth.setSystemInstruction}
         defaultSystemInstruction={auth.DEFAULT_SYSTEM_INSTRUCTION}
         pushSystemInstruction={auth.pushSystemInstruction}
+        isAdmin={isAdmin}
+        onOpenSandbox={() => { setIsSandboxOpen(true); conv.setDrawerOpen(false); }}
       />
 
       <ChatHeader
@@ -205,6 +222,12 @@ export default function ChatPage() {
       <MemoryManager
         open={isMemoryManagerOpen}
         onClose={() => setIsMemoryManagerOpen(false)}
+      />
+
+      {/* Admin Sandbox Modal */}
+      <SandboxModal
+        open={isSandboxOpen}
+        onClose={() => setIsSandboxOpen(false)}
       />
     </main>
   );
