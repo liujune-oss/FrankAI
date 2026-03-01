@@ -94,8 +94,16 @@ export default function SandboxModal({ open, onClose }: SandboxModalProps) {
             const data = await res.json();
             if (res.ok) {
                 try {
+                    // Gemini might wrap the json response in markdown ```json ... ``` tags
+                    let rawResult = data.result.trim();
+                    if (rawResult.startsWith('```json')) {
+                        rawResult = rawResult.replace(/^```json\n/, '').replace(/\n```$/, '');
+                    } else if (rawResult.startsWith('```')) {
+                        rawResult = rawResult.replace(/^```\n/, '').replace(/\n```$/, '');
+                    }
+
                     // Try to pretty print JSON if applicable
-                    const parsed = JSON.parse(data.result);
+                    const parsed = JSON.parse(rawResult);
                     setResult(JSON.stringify(parsed, null, 2));
                 } catch {
                     // Not JSON or plain text
