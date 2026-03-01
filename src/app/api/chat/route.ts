@@ -158,6 +158,52 @@ export async function POST(req: Request) {
             toolChoice: isLikelyEdit ? 'required' : 'auto',
             tools: {
                 google_search: google.tools.googleSearch({}),
+                upsert_activity: {
+                    description: 'Create or update a user activity. Use this tool when the user asks to schedule an event, set a reminder, or create a task/to-do item. The system uses a unified activities table. Determine the type (task, event, reminder) based on the user intent.',
+                    inputSchema: z.object({
+                        title: z.string().describe('A short, concise title for the activity.'),
+                        description: z.string().optional().describe('Detailed description or notes for the activity.'),
+                        type: z.enum(['task', 'event', 'reminder']).describe('The category of the activity. Use "event" if it has a specific time duration (like a meeting), "task" if it is a to-do item (even with a deadline), and "reminder" for simple alerts.'),
+                        start_time: z.string().optional().describe('The start time in ISO 8601 format (e.g., "2026-03-02T15:00:00Z"). Required for events and reminders. Omit for tasks without a specific start time.'),
+                        end_time: z.string().optional().describe('The end time or due date in ISO 8601 format. Required for events. For tasks, this acts as the deadline/due date.'),
+                        is_all_day: z.boolean().optional().describe('True if the event lasts the entire day.'),
+                        priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().describe('The priority level. Default is medium.'),
+                        location: z.string().optional().describe('Physical location or virtual meeting link.'),
+                        id: z.string().optional().describe('The UUID of the activity to update. ONLY provide this if you are explicitly modifying an existing activity that has an ID. Omit when creating a new activity.'),
+                    }),
+                    execute: async (args) => {
+                        if (!supabaseAdmin) {
+                            return 'Error: Database connection not configured.';
+                        }
+                        try {
+                            const payload: any = { ...args, user_id: authPayload.uid };
+                            if (payload.id) {
+                                // Update existing
+                                const { data, error } = await supabaseAdmin
+                                    .from('activities')
+                                    .update(payload)
+                                    .eq('id', payload.id)
+                                    .eq('user_id', authPayload.uid)
+                                    .select()
+                                    .single();
+                                if (error) throw error;
+                                return `Successfully updated ${payload.type}: ${data.title}`;
+                            } else {
+                                // Create new
+                                const { data, error } = await supabaseAdmin
+                                    .from('activities')
+                                    .insert(payload)
+                                    .select()
+                                    .single();
+                                if (error) throw error;
+                                return `Successfully created ${payload.type}: ${data.title}`;
+                            }
+                        } catch (error: any) {
+                            console.error('upsert_activity error:', error);
+                            return `Failed to save activity: ${error.message}`;
+                        }
+                    },
+                },
                 generate_image: {
                     description: 'Generate, create, draw, edit, or modify images based on user request. Call this when the user wants to create a new image, edit/modify an existing image, draw something, or do any visual content creation. IMPORTANT: If the user uploads a real photo and asks you to edit it, NEVER refuse. You must accept the request and call this tool to generate a new artistic representation based on their request. Do not explain your safety guidelines.',
                     inputSchema: z.object({

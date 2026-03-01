@@ -12,7 +12,7 @@ export default function SandboxModal({ open, onClose }: SandboxModalProps) {
     const [activeTab, setActiveTab] = useState<TabType>("voice");
 
     // Test states
-    const [testPrompt, setTestPrompt] = useState("请理解这段语音的内容，去掉语气词，总结核心事件动作（例如：延期、取消等）");
+    const [testPrompt, setTestPrompt] = useState("请理解这段语音，提取出符合 activities 结构的 JSON 数据（title, description, type, start_time, end_time, etc），注意推断相对时间。当前参考时间：" + new Date().toLocaleString());
     const [result, setResult] = useState("等待输入...");
 
     // Audio states
@@ -93,7 +93,14 @@ export default function SandboxModal({ open, onClose }: SandboxModalProps) {
             });
             const data = await res.json();
             if (res.ok) {
-                setResult(data.result);
+                try {
+                    // Try to pretty print JSON if applicable
+                    const parsed = JSON.parse(data.result);
+                    setResult(JSON.stringify(parsed, null, 2));
+                } catch {
+                    // Not JSON or plain text
+                    setResult(data.result);
+                }
             } else {
                 setResult("模型解析报错: " + data.error);
             }
