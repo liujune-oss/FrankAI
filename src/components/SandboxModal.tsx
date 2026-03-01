@@ -25,7 +25,10 @@ export default function SandboxModal({ open, onClose }: SandboxModalProps) {
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const [audioBase64, setAudioBase64] = useState<string>("");
     const [audioMime, setAudioMime] = useState<string>("");
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoadingSTT, setIsLoadingSTT] = useState(false);
+    const [sttResult, setSttResult] = useState("等待输入...");
+    const [isLoadingExtract, setIsLoadingExtract] = useState(false);
+    const [extractResult, setExtractResult] = useState<any>(null);
 
     useEffect(() => {
         setIsMounted(true);
@@ -124,11 +127,16 @@ export default function SandboxModal({ open, onClose }: SandboxModalProps) {
 
     const handleVoiceTest = async () => {
         if (!audioBase64) {
-            setResult("请先录制一段语音！");
+            setSttResult("请先录制一段语音！");
             return;
         }
-        setIsLoading(true);
-        setResult("正在向原生 Gemini 3.0 Flash 发送音频流进行解码与提炼...");
+
+        // Phase 1: STT
+        setIsLoadingSTT(true);
+        setSttResult("【Phase 1】正在转写纯文本 (STT)...");
+        setExtractResult(null);
+        let transcribedText = "";
+
         try {
             const res = await fetch('/api/admin/voice-test', {
                 method: 'POST',
@@ -137,35 +145,45 @@ export default function SandboxModal({ open, onClose }: SandboxModalProps) {
             });
             const data = await res.json();
             if (res.ok) {
-                try {
-                    // Gemini might wrap the json response in markdown ```json ... ``` tags
-                    let rawResult = data.result.trim();
-                    if (rawResult.startsWith('```json')) {
-                        rawResult = rawResult.replace(/^```json\n/, '').replace(/\n```$/, '');
-                    } else if (rawResult.startsWith('```')) {
-                        rawResult = rawResult.replace(/^```\n/, '').replace(/\n```$/, '');
-                    }
-
-                    // Try to pretty print JSON if applicable
-                    const parsed = JSON.parse(rawResult);
-                    setResult(JSON.stringify(parsed, null, 2));
-                } catch {
-                    // Not JSON or plain text
-                    setResult(data.result);
-                }
+                transcribedText = data.result.trim();
+                setSttResult(transcribedText);
             } else {
-                setResult("模型解析报错: " + data.error);
+                setSttResult("STT 解析报错: " + data.error);
+                return;
             }
         } catch (e: any) {
-            setResult("请求失败: " + e.message);
+            setSttResult("请求失败: " + e.message);
+            return;
         } finally {
-            setIsLoading(false);
+            setIsLoadingSTT(false);
+        }
+
+        if (!transcribedText) return;
+
+        // Phase 2: Schema Extraction (Function Calling simulation)
+        setIsLoadingExtract(true);
+        try {
+            const resExtract = await fetch('/api/admin/voice-extract', {
+                method: 'POST',
+                body: JSON.stringify({ text: transcribedText }),
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const extractData = await resExtract.json();
+            if (resExtract.ok) {
+                setExtractResult(extractData.result);
+            } else {
+                setSttResult((prev) => prev + "\n\n【Phase 2 提取报错】: " + extractData.error);
+            }
+        } catch (e: any) {
+            setSttResult((prev) => prev + "\n\n【Phase 2 请求失败】: " + e.message);
+        } finally {
+            setIsLoadingExtract(false);
         }
     };
 
     const handleCopy = () => {
-        if (!result || result === "等待输入...") return;
-        navigator.clipboard.writeText(result);
+        if (!extractResult) return;
+        navigator.clipboard.writeText(JSON.stringify(extractResult, null, 2));
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
@@ -281,28 +299,44 @@ export default function SandboxModal({ open, onClose }: SandboxModalProps) {
                                     </div>
                                     <button
                                         onClick={handleVoiceTest}
-                                        disabled={!audioBase64 || isLoading}
+                                        disabled={!audioBase64 || isLoadingSTT || isLoadingExtract}
                                         className="flex items-center gap-2 px-4 py-2 bg-foreground text-background disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-medium hover:bg-foreground/90 transition-all active:scale-95"
                                     >
-                                        {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-                                        提交给 Gemini 解码
+                                        {(isLoadingSTT || isLoadingExtract) ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+                                        执行解耦流水线测试
                                     </button>
                                 </div>
 
-                                <div className="space-y-2 pt-4 border-t flex-1 flex flex-col min-h-0 relative group">
-                                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex justify-between">
-                                        <span>大模型返回结果 (净化提取后)</span>
-                                        {audioMime && <span>{audioMime}</span>}
-                                    </label>
-                                    <div className="flex-1 w-full bg-black rounded-xl p-4 font-mono text-sm leading-relaxed text-green-400 overflow-y-auto whitespace-pre-wrap relative">
-                                        <button
-                                            onClick={handleCopy}
-                                            className="absolute top-3 right-3 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors opacity-0 group-hover:opacity-100"
-                                            title="复制结果"
-                                        >
-                                            {copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
-                                        </button>
-                                        {result}
+                                <div className="grid grid-cols-2 gap-4 flex-1 min-h-[220px]">
+                                    {/* Phase 1: STT Result */}
+                                    <div className="space-y-2 flex flex-col relative group">
+                                        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex justify-between items-center">
+                                            <span>[Phase 1] 纯文本转写 (STT)</span>
+                                            {isLoadingSTT && <Loader2 size={12} className="animate-spin text-purple-500" />}
+                                        </label>
+                                        <div className="flex-1 w-full bg-muted/30 border border-border/50 rounded-xl p-4 text-sm leading-relaxed text-foreground overflow-y-auto whitespace-pre-wrap">
+                                            {sttResult}
+                                        </div>
+                                    </div>
+
+                                    {/* Phase 2: Structural Extraction Result */}
+                                    <div className="space-y-2 flex flex-col relative group border-l pl-4">
+                                        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex justify-between items-center">
+                                            <span>[Phase 2] 函数调用 & Schema 提取</span>
+                                            {isLoadingExtract && <Loader2 size={12} className="animate-spin text-purple-500" />}
+                                        </label>
+                                        <div className="flex-1 w-full bg-black rounded-xl p-4 font-mono text-xs leading-relaxed text-green-400 overflow-y-auto whitespace-pre-wrap relative shadow-inner">
+                                            {extractResult && (
+                                                <button
+                                                    onClick={handleCopy}
+                                                    className="absolute top-3 right-3 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors opacity-0 group-hover:opacity-100"
+                                                    title="复制 JSON"
+                                                >
+                                                    {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                                                </button>
+                                            )}
+                                            {extractResult ? JSON.stringify(extractResult, null, 2) : (isLoadingExtract ? "正在强制结构化输出..." : "等待 Phase 1 完成...")}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
