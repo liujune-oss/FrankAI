@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
             }
         });
 
-        const basePrompt = prompt || "请将以下语音内容提取为清晰、专业的文字笔记，并去除废话和语气词。";
+        const dbPrompt = await getConfig<string>('voice_intent_prompt');
+        const basePrompt = prompt || dbPrompt || "请将以下语音内容提取为清晰、专业的文字笔记，并去除废话和语气词。";
         const finalPrompt = `${basePrompt}\n\n推断时间时，请以此为绝对基准当前时间：${new Date().toISOString()}`;
 
         const parts = [

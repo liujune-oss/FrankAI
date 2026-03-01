@@ -12,50 +12,11 @@ export default function SandboxModal({ open, onClose }: SandboxModalProps) {
     const [activeTab, setActiveTab] = useState<TabType>("voice");
 
     // Test states
-    const defaultPrompt = `你是一个智能语音分析助手。请理解这段语音的内容，去掉语气词，总结意图并将其提取为一个符合数据库定义的活动记录 (Activity)。
-
-【数据库 Schema 定义参考】
-\`\`\`sql
-CREATE TABLE activities (
-    title TEXT NOT NULL,
-    description TEXT,
-    type TEXT CHECK (type IN ('task', 'event', 'reminder')) NOT NULL,
-    status TEXT CHECK (status IN ('needs_action', 'in_process', 'completed', 'cancelled')) DEFAULT 'needs_action',
-    priority TEXT CHECK (priority IN ('low', 'medium', 'high', 'urgent')) DEFAULT 'medium',
-    -- A task has a due date (end_time), no start_time.
-    -- An event has both start_time and end_time.
-    -- A reminder might only have a start_time (when to alert).
-    start_time TIMESTAMP WITH TIME ZONE,
-    end_time TIMESTAMP WITH TIME ZONE,
-    is_all_day BOOLEAN DEFAULT FALSE,
-    location TEXT
-);
-\`\`\`
-
-【非常重要：枚举值严格约束】
-- type 字段【必须且只能】是从 schema 的约束中挑选："task", "event", "reminder"。绝对不能输出其他词语！(例如绝对不能输出 "meeting" 或 "开会")
-- priority 字段【必须且只能】是从 schema 的约束中挑选："low", "medium", "high", "urgent"。
-
-【极其重要：禁止自行发明字段】
-这不仅是一次内容理解，这是一次**严格的数据结构转换**。
-请**绝对不要**返回诸如 "absolute_time", "original_text", 或以 "event" 作为 key 的任何你自己发明的字段。
-你的整个返回数据，**必须且只能包含以下 8 个 key**：
-
-请严格按以下 JSON 格式输出，只能是个 JSON 对象，不要输出任何多余内容或 markdown 标记：
-{
-  "title": "活动标题",
-  "description": "详细描述（可为空字符串）",
-  "type": "task" | "event" | "reminder",
-  "priority": "low" | "medium" | "high" | "urgent",
-  "start_time": "ISO 8601 格式或 null (重要：必须是这个 key 名字，绝不能用 absolute_time)",
-  "end_time": "ISO 8601 格式或 null",
-  "is_all_day": boolean,
-  "location": "地点或 null"
-}`;
-    const [testPrompt, setTestPrompt] = useState(defaultPrompt);
+    const [testPrompt, setTestPrompt] = useState("正在加载配置...");
     const [result, setResult] = useState("等待输入...");
     const [copied, setCopied] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
+    const [isSavingPrompt, setIsSavingPrompt] = useState(false);
 
     // Audio states
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -68,20 +29,43 @@ CREATE TABLE activities (
 
     useEffect(() => {
         setIsMounted(true);
-        const savedPrompt = localStorage.getItem("sandbox_voice_prompt");
-        if (savedPrompt) {
-            setTestPrompt(savedPrompt);
+        if (open) {
+            // Fetch prompt from database config
+            fetch('/api/admin/voice-prompt')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.prompt) setTestPrompt(data.prompt);
+                })
+                .catch(err => {
+                    console.error("Failed to load prompt:", err);
+                    setTestPrompt("加载配置失败，请检查网络连接。");
+                });
         }
-    }, []);
+    }, [open]);
 
     const handlePromptChange = (newPrompt: string) => {
         setTestPrompt(newPrompt);
-        localStorage.setItem("sandbox_voice_prompt", newPrompt);
+        // We only save to DB explicitly now, not on every keystroke
     };
 
-    const resetPrompt = () => {
-        setTestPrompt(defaultPrompt);
-        localStorage.removeItem("sandbox_voice_prompt");
+    const savePromptToDB = async () => {
+        setIsSavingPrompt(true);
+        try {
+            const res = await fetch('/api/admin/voice-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: testPrompt })
+            });
+            if (res.ok) {
+                setResult("✅ 提示词已成功保存到全局配置数据库！Agent Center 将应用此规则。");
+            } else {
+                setResult("保存失败：" + res.statusText);
+            }
+        } catch (e: any) {
+            setResult("保存失败：" + e.message);
+        } finally {
+            setIsSavingPrompt(false);
+        }
     };
 
     if (!open) return null;
@@ -251,15 +235,16 @@ CREATE TABLE activities (
                                 <div className="space-y-2 flex-shrink-0 relative group">
                                     <div className="flex justify-between items-center">
                                         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                            提词器 (Prompt for the Audio Context)
+                                            全局配置词 (Voice Intent Prompt)
                                         </label>
                                         <button
-                                            onClick={resetPrompt}
-                                            className="text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-                                            title="恢复默认提示词"
+                                            onClick={savePromptToDB}
+                                            disabled={isSavingPrompt}
+                                            className="text-xs flex items-center gap-1 px-2 py-1 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 rounded transition-colors disabled:opacity-50"
+                                            title="保存到全局数据库"
                                         >
-                                            <RotateCcw size={12} />
-                                            重置
+                                            {isSavingPrompt ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                                            保存为全局 Agent 配置
                                         </button>
                                     </div>
                                     {isMounted ? (

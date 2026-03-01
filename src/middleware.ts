@@ -12,8 +12,9 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // Allow the admin login API route and voice test route to pass through
-    if (request.nextUrl.pathname === '/api/admin/auth' || request.nextUrl.pathname === '/api/admin/voice-test') {
+    // Allow the admin login API route, voice test route, and voice prompt route to pass through
+    const publicApiRoutes = ['/api/admin/auth', '/api/admin/voice-test', '/api/admin/voice-prompt'];
+    if (publicApiRoutes.includes(request.nextUrl.pathname)) {
         return NextResponse.next();
     }
 
