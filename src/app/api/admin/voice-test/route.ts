@@ -42,16 +42,21 @@ CREATE TABLE activities (
 \`\`\`
 
 【非常重要：枚举值严格约束】
-- type 字段【必须且只能】是从 schema 的约束中挑选："task", "event", "reminder"。绝对不能输出其他词语！
+- type 字段【必须且只能】是从 schema 的约束中挑选："task", "event", "reminder"。绝对不能输出其他词语！(例如绝对不能输出 "meeting" 或 "开会")
 - priority 字段【必须且只能】是从 schema 的约束中挑选："low", "medium", "high", "urgent"。
 
-请严格按以下 JSON 格式输出，不要输出多余解释：
+【极其重要：禁止自行发明字段】
+这不仅是一次内容理解，这是一次**严格的数据结构转换**。
+请**绝对不要**返回诸如 "absolute_time", "original_text", 或以 "event" 作为 key 的任何你自己发明的字段。
+你的整个返回数据，**必须且只能包含以下 8 个 key**：
+
+请严格按以下 JSON 格式输出，只能是个 JSON 对象，不要输出任何多余内容或 markdown 标记：
 {
-  "title": "...",
-  "description": "...",
-  "type": "...",
-  "priority": "...",
-  "start_time": "ISO 8601 格式或 null",
+  "title": "活动标题",
+  "description": "详细描述（可为空字符串）",
+  "type": "task" | "event" | "reminder",
+  "priority": "low" | "medium" | "high" | "urgent",
+  "start_time": "ISO 8601 格式或 null (重要：必须是这个 key 名字，绝不能用 absolute_time)",
   "end_time": "ISO 8601 格式或 null",
   "is_all_day": boolean,
   "location": "地点或 null"
