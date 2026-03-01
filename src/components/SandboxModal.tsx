@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { X, Beaker, Play, Mic, CalendarDays, BrainCircuit, Square, Loader2, Copy, Check } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { X, Beaker, Play, Mic, CalendarDays, BrainCircuit, Square, Loader2, Copy, Check, RotateCcw } from "lucide-react";
 
 interface SandboxModalProps {
     open: boolean;
@@ -55,6 +55,7 @@ CREATE TABLE activities (
     const [testPrompt, setTestPrompt] = useState(defaultPrompt);
     const [result, setResult] = useState("等待输入...");
     const [copied, setCopied] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
 
     // Audio states
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -64,6 +65,24 @@ CREATE TABLE activities (
     const [audioBase64, setAudioBase64] = useState<string>("");
     const [audioMime, setAudioMime] = useState<string>("");
     const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+        const savedPrompt = localStorage.getItem("sandbox_voice_prompt");
+        if (savedPrompt) {
+            setTestPrompt(savedPrompt);
+        }
+    }, []);
+
+    const handlePromptChange = (newPrompt: string) => {
+        setTestPrompt(newPrompt);
+        localStorage.setItem("sandbox_voice_prompt", newPrompt);
+    };
+
+    const resetPrompt = () => {
+        setTestPrompt(defaultPrompt);
+        localStorage.removeItem("sandbox_voice_prompt");
+    };
 
     if (!open) return null;
 
@@ -229,15 +248,29 @@ CREATE TABLE activities (
                                     </p>
                                 </div>
 
-                                <div className="space-y-2 flex-shrink-0">
-                                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                        提词器 (Prompt for the Audio Context)
-                                    </label>
-                                    <textarea
-                                        value={testPrompt}
-                                        onChange={(e) => setTestPrompt(e.target.value)}
-                                        className="w-full h-56 px-4 py-3 bg-background border rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/50 resize-none text-sm font-mono leading-relaxed"
-                                    />
+                                <div className="space-y-2 flex-shrink-0 relative group">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            提词器 (Prompt for the Audio Context)
+                                        </label>
+                                        <button
+                                            onClick={resetPrompt}
+                                            className="text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                                            title="恢复默认提示词"
+                                        >
+                                            <RotateCcw size={12} />
+                                            重置
+                                        </button>
+                                    </div>
+                                    {isMounted ? (
+                                        <textarea
+                                            value={testPrompt}
+                                            onChange={(e) => handlePromptChange(e.target.value)}
+                                            className="w-full h-56 px-4 py-3 bg-background border rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/50 resize-none text-sm font-mono leading-relaxed"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-56 px-4 py-3 bg-muted/50 border rounded-xl animate-pulse" />
+                                    )}
                                 </div>
 
                                 <div className="flex items-center justify-between shrink-0 bg-muted/30 p-4 rounded-xl border border-border/50">
