@@ -21,25 +21,43 @@ export async function POST(req: NextRequest) {
             }
         });
 
-        const systemPrompt = `你是一个智能语音分析助手。请理解这段语音的内容，去掉语气词，总结意图并将其提取为一个活动记录 (Activity)。
+        const systemPrompt = `你是一个智能语音分析助手。请理解这段语音的内容，去掉语气词，总结意图并将其提取为一个符合数据库定义的活动记录 (Activity)。
+
+【数据库 Schema 定义参考】
+\`\`\`sql
+CREATE TABLE activities (
+    title TEXT NOT NULL,
+    description TEXT,
+    type TEXT CHECK (type IN ('task', 'event', 'reminder')) NOT NULL,
+    status TEXT CHECK (status IN ('needs_action', 'in_process', 'completed', 'cancelled')) DEFAULT 'needs_action',
+    priority TEXT CHECK (priority IN ('low', 'medium', 'high', 'urgent')) DEFAULT 'medium',
+    -- A task has a due date (end_time), no start_time.
+    -- An event has both start_time and end_time.
+    -- A reminder might only have a start_time (when to alert).
+    start_time TIMESTAMP WITH TIME ZONE,
+    end_time TIMESTAMP WITH TIME ZONE,
+    is_all_day BOOLEAN DEFAULT FALSE,
+    location TEXT
+);
+\`\`\`
 
 【非常重要：枚举值严格约束】
-- type 字段【必须且只能】是以下三个字符串之一："task"（待办/无明确时间的任务）、"event"（日程/有具体起止时间的会议或活动）、"reminder"（单次提醒）。绝对不能输出其他词语！
-- priority 字段【必须且只能】是以下四个字符串之一："low"、"medium"、"high"、"urgent"。如果没有明显优先级，默认为 "medium"。
+- type 字段【必须且只能】是从 schema 的约束中挑选："task", "event", "reminder"。绝对不能输出其他词语！
+- priority 字段【必须且只能】是从 schema 的约束中挑选："low", "medium", "high", "urgent"。
 
-请严格按以下 JSON schema 格式输出：
+请严格按以下 JSON 格式输出，不要输出多余解释：
 {
-  "title": "活动简要标题",
-  "description": "如果有详细说明可以放这里",
-  "type": "task" | "event" | "reminder",
-  "priority": "low" | "medium" | "high" | "urgent",
-  "start_time": "ISO 8601格式的时间戳 (例如: 2026-03-02T15:00:00Z)，没有明确开始时间则留空 null",
-  "end_time": "ISO 8601格式的时间戳，作为日程的结束时间或待办的截止时间，没有则留空 null",
+  "title": "...",
+  "description": "...",
+  "type": "...",
+  "priority": "...",
+  "start_time": "ISO 8601 格式或 null",
+  "end_time": "ISO 8601 格式或 null",
   "is_all_day": boolean,
-  "location": "地点，没有留空 null"
+  "location": "地点或 null"
 }
 
-推断时间时，请以此为基准当前时间：${new Date().toISOString()}`;
+推断时间时，请以此为绝对基准当前时间：${new Date().toISOString()}`;
 
         const parts = [
             { text: prompt || systemPrompt },

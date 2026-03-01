@@ -12,7 +12,7 @@ export default function SandboxModal({ open, onClose }: SandboxModalProps) {
     const [activeTab, setActiveTab] = useState<TabType>("voice");
 
     // Test states
-    const [testPrompt, setTestPrompt] = useState("提取活动信息为 JSON (title, description, type, start_time, end_time等)。\n[约束]: type 必须且只能是 'task', 'event', 'reminder' 之一。priority 只能是 'low', 'medium', 'high', 'urgent'。没有时间就填 null。当前基准时间：" + new Date().toLocaleString());
+    const [testPrompt, setTestPrompt] = useState("底层 API 已经硬编码了活动的 SQL Schema，此处的自定义要求作为补充。\n[额外约束]: 请确保把相对时间转换为绝对时间。当前基准时间：" + new Date().toLocaleString());
     const [result, setResult] = useState("等待输入...");
 
     // Audio states
