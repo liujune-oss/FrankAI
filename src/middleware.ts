@@ -12,8 +12,8 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // Allow the admin login API route to pass through
-    if (request.nextUrl.pathname === '/api/admin/auth') {
+    // Allow the admin login API route and voice test route to pass through
+    if (request.nextUrl.pathname === '/api/admin/auth' || request.nextUrl.pathname === '/api/admin/voice-test') {
         return NextResponse.next();
     }
 
