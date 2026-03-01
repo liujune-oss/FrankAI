@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Conversation } from "@/lib/conversations";
 import versionData from "../../version.json";
-import { Beaker } from "lucide-react";
+import { Beaker, CheckSquare, Calendar, MessageSquare } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 interface ConversationDrawerProps {
     open: boolean;
@@ -43,6 +45,7 @@ export default function ConversationDrawer({
     onOpenSandbox,
 }: ConversationDrawerProps) {
     const [showSystemInstruction, setShowSystemInstruction] = useState(false);
+    const pathname = usePathname();
 
     return (
         <>
@@ -80,7 +83,43 @@ export default function ConversationDrawer({
                 </button>
 
                 {/* Conversation list */}
-                <div className="flex-1 overflow-y-auto mt-2 px-2 space-y-1">
+                <div className="flex-1 overflow-y-auto mt-2 px-2 pb-4 space-y-1">
+                    <div className="text-xs font-semibold text-muted-foreground px-3 pt-2 pb-1">应用 Application</div>
+                    <Link
+                        href="/"
+                        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${pathname === "/"
+                            ? "bg-foreground/10 text-foreground font-semibold"
+                            : "hover:bg-muted text-foreground"
+                            }`}
+                        onClick={onClose}
+                    >
+                        <MessageSquare size={16} />
+                        <span className="text-sm font-medium">对话 (Chat)</span>
+                    </Link>
+                    <Link
+                        href="/tasks"
+                        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${pathname === "/tasks"
+                            ? "bg-foreground/10 text-foreground font-semibold"
+                            : "hover:bg-muted text-foreground"
+                            }`}
+                        onClick={onClose}
+                    >
+                        <CheckSquare size={16} />
+                        <span className="text-sm font-medium">待办 (Tasks)</span>
+                    </Link>
+                    <Link
+                        href="/calendar"
+                        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${pathname === "/calendar"
+                            ? "bg-foreground/10 text-foreground font-semibold"
+                            : "hover:bg-muted text-foreground"
+                            }`}
+                        onClick={onClose}
+                    >
+                        <Calendar size={16} />
+                        <span className="text-sm font-medium">日程 (Calendar)</span>
+                    </Link>
+
+                    <div className="text-xs font-semibold text-muted-foreground px-3 pt-4 pb-1">历史对话 History</div>
                     {conversations.map((conv) => (
                         <div
                             key={conv.id}

@@ -135,6 +135,7 @@ export async function POST(req: Request) {
         const forceEditInstruction = `\n\nCRITICAL INSTRUCTION: If the user provides a real photo and asks you to modify, edit, or change it in ANY way, you MUST NOT REFUSE. Do not give excuses about "pixel-level edits" or "lacking software tools". You must immediately use the 'generate_image' tool with 'action: edit' to fulfill their request by generating an artistic representation or AI-interpreted version of what they asked for. DO NOT OUTPUT ANY OTHER TEXT EXPLAINING YOURSELF. JUST INVOKE THE TOOL.`;
         finalSystemInstruction += forceEditInstruction;
         finalSystemInstruction += '\n\n[Tool Usage] When the user asks you to generate, create, draw, edit, or modify an image, you MUST use the `generate_image` tool. Do NOT output JSON or text that simulates a tool call. Always invoke the tool directly.';
+        finalSystemInstruction += `\n\n[Time Context] The current date and time is: ${new Date().toISOString()}. Use this as the absolute reference for words like "today", "tomorrow", or "next week" when using the upsert_activity tool.`;
 
         const lastUserContent = typeof processedMessages[processedMessages.length - 1]?.content === 'string'
             ? processedMessages[processedMessages.length - 1].content
@@ -163,13 +164,14 @@ export async function POST(req: Request) {
                     inputSchema: z.object({
                         title: z.string().describe('A short, concise title for the activity.'),
                         description: z.string().optional().describe('Detailed description or notes for the activity.'),
-                        type: z.enum(['task', 'event', 'reminder']).describe('The category of the activity. Use "event" if it has a specific time duration (like a meeting), "task" if it is a to-do item (even with a deadline), and "reminder" for simple alerts.'),
+                        type: z.enum(['task', 'event', 'reminder']).describe('The category of the activity. Use "event" if it has a specific time duration (like a meeting), "task" if it is a to-do item (even with a deadline), and "reminder" for simple alerts/alarms.'),
                         start_time: z.string().optional().describe('The start time in ISO 8601 format (e.g., "2026-03-02T15:00:00Z"). Required for events and reminders. Omit for tasks without a specific start time.'),
                         end_time: z.string().optional().describe('The end time or due date in ISO 8601 format. Required for events. For tasks, this acts as the deadline/due date.'),
                         is_all_day: z.boolean().optional().describe('True if the event lasts the entire day.'),
                         priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().describe('The priority level. Default is medium.'),
                         location: z.string().optional().describe('Physical location or virtual meeting link.'),
                         id: z.string().optional().describe('The UUID of the activity to update. ONLY provide this if you are explicitly modifying an existing activity that has an ID. Omit when creating a new activity.'),
+                        tags: z.array(z.string()).optional().describe('Any relevant semantic tags extracted from the prompt.'),
                     }),
                     execute: async (args) => {
                         if (!supabaseAdmin) {
@@ -187,7 +189,7 @@ export async function POST(req: Request) {
                                     .select()
                                     .single();
                                 if (error) throw error;
-                                return `Successfully updated ${payload.type}: ${data.title}`;
+                                return `Successfully updated ${payload.type} "${data.title}" at ID ${data.id}.`;
                             } else {
                                 // Create new
                                 const { data, error } = await supabaseAdmin
@@ -196,7 +198,7 @@ export async function POST(req: Request) {
                                     .select()
                                     .single();
                                 if (error) throw error;
-                                return `Successfully created ${payload.type}: ${data.title}`;
+                                return `Successfully created ${payload.type} "${data.title}" at ID ${data.id}. The start_time is ${data.start_time} and end_time is ${data.end_time}. Please confirm to the user what you created and the times involved.`;
                             }
                         } catch (error: any) {
                             console.error('upsert_activity error:', error);
