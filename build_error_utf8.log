@@ -1,0 +1,128 @@
+﻿
+> gemini-chat-pwa@1.8.23 build
+> next build && node build-sw.js
+
+node.exe : [@serwist/next] WARNI
+NG: You are using '@serwist/next
+' with `next dev --turbopack`, b
+ut it doesn't support Turbopack.
+ Do one of the following:
+所在位置 行:1 字符: 1
++ & "C:\Program Files\nodejs/nod
+e.exe" "C:\Program Files\nodejs/
+node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~
+    + CategoryInfo          : N 
+   otSpecified: ([@serwist/nex  
+  t]... the following::String   
+ ) [], RemoteException
+    + FullyQualifiedErrorId : N 
+   ativeCommandError
+ 
+
+- Set `disable` to `process.env.
+NODE_ENV !== "production"`.
+
+- Use webpack by running `next d
+ev --webpack` instead of `next d
+ev --turbopack`.
+
+- Migrate to '@serwist/turbopack
+' which has experimental support
+ for Turbopack. See https://serw
+ist.pages.dev/docs/next/turbo fo
+r more information.
+
+- Migrate to configurator mode w
+hich has support for Turbopack. 
+See https://serwist.pages.dev/do
+cs/next/config for more informat
+ion. 
+
+Follow https://github.com/serwis
+t/serwist/issues/54 for progress
+ on Serwist + Turbopack. You can
+ also suppress this warning by s
+etting SERWIST_SUPPRESS_TURBOPAC
+K_WARNING=1.
+
+鈻?Next.js 16.1.6 (Turbopack)
+- Environments: .env.local
+
+鈿?The "middleware" file conventi
+on is deprecated. Please use "pr
+oxy" instead. Learn more: https:
+//nextjs.org/docs/messages/middl
+eware-to-proxy
+  Creating an optimized production build ...
+鉁?Compiled successfully in 1333.2ms
+  Running TypeScript ...
+Failed to compile.
+
+./src/app/api/chat/route.ts:177:
+21
+Type error: Object literal may o
+nly specify known properties, an
+d 'parameters' does not exist in
+ type '({ description?: string |
+ undefined; title?: string | und
+efined; providerOptions?: Shared
+V3ProviderOptions | undefined; i
+nputSchema: FlexibleSchema<any>;
+ ... 5 more ...; onInputAvailabl
+e?: ((options: { ...; } & ToolEx
+ecutionOptions) => void | Promis
+eLike<...>) | undefined; } & Par
+tial<...> & { ...; } & { ...; } 
+& Pi...'.
+
+[0m [90m 175 |[39m           
+      upsert_activity[33m:[39m
+ {
+ [90m 176 |[39m               
+      description[33m:[39m [3
+2m'Create or update a user activ
+ity. Use this tool when the user
+ asks to schedule an event, set 
+a reminder, or create a task/to-
+do item. The system uses a unifi
+ed activities table. Determine t
+he type (task, event, reminder) 
+based on the user intent.'[39m
+[33m,[39m
+[31m[1m>[22m[39m[90m 177 |
+[39m                     paramet
+ers[33m:[39m z[33m.[39mobjec
+t({
+ [90m     |[39m               
+      [31m[1m^[22m[39m
+ [90m 178 |[39m               
+          title[33m:[39m z[33
+m.[39mstring()[33m.[39mdescri
+be([32m'A short, concise title 
+for the activity.'[39m)[33m,[
+39m
+ [90m 179 |[39m               
+          description[33m:[39m
+ z[33m.[39mstring()[33m.[39m
+optional()[33m.[39mdescribe([
+32m'Detailed description or note
+s for the activity.'[39m)[33m,
+[39m
+ [90m 180 |[39m               
+          type[33m:[39m z[33m
+.[39m[36menum[39m([[32m'task
+'[39m[33m,[39m [32m'event'[
+39m[33m,[39m [32m'reminder'[
+39m])[33m.[39mdescribe([32m'T
+he category of the activity. Use
+ "event" if it has a specific ti
+me duration (like a meeting), "t
+ask" if it is a to-do item (even
+ with a deadline), and "reminder
+" for simple alerts/alarms.'[39
+m)[33m,[39m[0m
+Next.js build worker exited with
+ code: 1 and signal: null
