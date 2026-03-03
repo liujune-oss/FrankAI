@@ -93,6 +93,16 @@
 - Service Worker：`build-sw.js` 构建，`sw.js` 注册
 - manifest.json：standalone 模式，192/512 图标
 
+### 7. 统一活动流 (Unified Activities)
+- 数据模型：`activities` (PostgreSQL)，通过 `type` 字段区分 `task`, `event` 和 `reminder`，不再创建割裂的多张表 (对应 `calendar_tasks_schema.sql`)。
+- 意图路由：前端用户发送如“明天开会”的聊天信息时，后端 `streamText` 中注入 `upsert_activity` Function Calling 工具，AI 自动根据语义补齐起止时间 (`start_time`, `end_time`)。
+- 容错机制：鉴于部分带 Thinking 的模型（或被前端 URL query 覆盖的模型名称）不支持在开启 `toolChoice: 'required'` 时正常生成响应，系统增加了底层的降级接管逻辑——一经判定意图涉及时程规划，后端强制将执行体降级覆盖为稳定的 `gemini-2.5-pro`。
+- 多步调用闭环：依赖 Vercel AI SDK `>=3.1`，必须额外配置 `maxSteps: 5`。在此设定下，大模型输出虚拟 Tool Payload 时，底层框架能自动触发对应的 `execute` 并异步执行 Supabase SQL 持久化，随后将持久化成功产生的 ID 返馈并生成最终用户响应。
+
+### 8. 语音与结构化 Sandbox (/admin/sandbox)
+- 两段式链路 (Two-Phase Extractor)：由于在复杂移动端下无法依靠单次提示词进行完美的语音端点切分与校正，新 Sandbox 创新引入分离模型：Phase 1 负责将语音流高容忍度转成乱序或非标文字 (STT)；Phase 2 固定调用 `gemini-1.5-pro` (更擅于 JSON schema 解析与防幻觉) 配合定制化的 Voice Prompt 结构化提取所需实体。
+- 动态提示词：Admin 界面可以随时修改 Phase 2 提取所用 Prompt 并落入 LocalStorage / `app_config` 联查，无需重新部署即可反复验证 Prompt 对各种方言杂音的抵抗力。
+
 ## 环境变量
 
 | 变量 | 说明 |

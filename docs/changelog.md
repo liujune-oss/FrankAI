@@ -1,5 +1,14 @@
 # Gemini Chat — 发布记录
 
+## v1.8.20 — 2026-03-03
+- **新增：Sandbox 语音结构化验证室**
+  - 在 Admin 控制台新增了专属测试环境，针对移动端的复杂语音环境设计了双阶段（Two-phase）抽取链路。将传统的杂乱口语录音通过 STT 转化为文本后，再由 `gemini-1.5-pro` 的 Function Calling 按设定 Schema 抽取为结构化 JSON。
+  - 支持 Sandbox 前端动态加载并持存在本地 LocalStorage，以及后续融合数据库 Config，实现无需重新部署即调参。
+- **新增/修复：AI 驱动的结构化日程流 (Unified Activities)**
+  - 建立并整合了统一的 `activities` 数据表（包含 task, event, reminder 类别）。
+  - **核心链路攻坚**：彻底修复了 Vercel AI SDK 中当工具调用（`toolChoice: 'required'`）遇到不支持 Function Calling 的实验模型时产生的死循环栈溢出异常，在底层增加了 `forcedToolChoice` 模型降级保护（退回至 `gemini-2.5-pro`）。
+  - **后端无感执行**：解构了新版 AI SDK 中需配置 `maxSteps: 5` 才能触发后端自动 `execute` 回调的底层逻辑，实现了自然语言对话与数据库的丝滑异步持久化，并终结了 Tasks 界面读取数据的无限轮询。
+
 ## v1.8.4 — 2026-02-26
 - **核心升级：3072维高阶记忆数据库完全支持**
   - **原生吞吐与 100% 召回**：彻底粉碎了此前 pgvector 的 2000 维 HNSW 索引限制。选择拥抱全表精准计算 (Exact Nearest Neighbor Search) 以取代近似搜索，在保证任何细微记忆片段零截断/切片、完全 3072 维持原下，实现了毫秒级检索 100% 的准确命召回率。

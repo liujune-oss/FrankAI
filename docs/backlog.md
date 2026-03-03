@@ -1,19 +1,12 @@
 # Gemini Chat — Backlog
 
-> 最后更新：2026-02-28
-
-## 🔥 正在解决
-
-- [ ] **大模型语音理解测试 (Sandbox)** — 验证 Gemini 3.0 Flash 在不同口音、语境下的转录纠错与结构化提取能力 (正在进行)
-
----
+> 最后更新：2026-03-03
 
 ## 待开发功能
 
 ### 🔴 高优先级
 
-- [ ] **PWA 语音直输 (Voice Input)** — 实现“按住说话”原型。路线：Web Audio API 记录 Blob -> 后端 Gemini ASR -> 文字上屏
-- [ ] **结构化日程管理 (Calendar Events)** — 建立 `calendar_events` 表，支持通过对话创建、修改和取消日程 (MVP 阶段)
+- [ ] **PWA 语音直输 (Voice Input)** — 实现聊天界面的实际“按住说话”原型。路线：Web Audio API 记录 Blob -> 后端 Gemini ASR -> 文字上屏 (目前仅在 Sandbox 中完成验证)
 - [ ] **意图解析强化 (Two-Hop Reasoning)** — 处理模糊指令（如“取消 3 点的会”），增加静默拉取与防呆追问逻辑
 
 ### 🟡 中优先级

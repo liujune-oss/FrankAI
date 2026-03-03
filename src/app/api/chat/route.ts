@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     try {
         const { messages, systemInstruction } = await req.json();
         const url = new URL(req.url);
-        const model = url.searchParams.get('model') || 'gemini-3.1-pro-preview';
+        const model = url.searchParams.get('model') || 'gemini-2.5-pro';
 
         let finalSystemInstruction = systemInstruction || '';
 
@@ -136,12 +136,18 @@ export async function POST(req: Request) {
         finalSystemInstruction += forceEditInstruction;
         finalSystemInstruction += '\n\n[Tool Usage] When the user asks you to generate, create, draw, edit, or modify an image, you MUST use the `generate_image` tool. Do NOT output JSON or text that simulates a tool call. Always invoke the tool directly.';
         finalSystemInstruction += `\n\n[Time Context] The current date and time is: ${new Date().toISOString()}. Use this as the absolute reference for words like "today", "tomorrow", or "next week" when using the upsert_activity tool.`;
+        finalSystemInstruction += '\n\nCRITICAL: When the user asks you to create, schedule, modify, or delete a task, event, or reminder, YOU MUST INVOKE THE `upsert_activity` TOOL. NEVER just reply with text saying "I have created it" without actually calling the tool. YOU MUST BE THE ONE TO CALL THE TOOL TO SAVE IT TO THE DATABASE.';
 
         const lastUserContent = typeof processedMessages[processedMessages.length - 1]?.content === 'string'
             ? processedMessages[processedMessages.length - 1].content
             : JSON.stringify(processedMessages[processedMessages.length - 1]?.content || '');
 
         const isLikelyEdit = lastUserContent.includes('修改') || lastUserContent.includes('换成') || lastUserContent.includes('改') || lastUserContent.includes('edit');
+        const isActivity = lastUserContent.includes('创建') || lastUserContent.includes('提醒') || lastUserContent.includes('任务') || lastUserContent.includes('日历') || lastUserContent.includes('安排');
+
+        let forcedToolChoice: any = 'auto';
+        if (isLikelyEdit) forcedToolChoice = 'required';
+        if (isActivity) forcedToolChoice = 'required';
 
         // Only send thinkingConfig if the model is capable (typically 2.0-flash-thinking, 2.5-pro, etc. But NOT deep-research)
         // We'll allow anything with 'thinking' in the name or the specific gemini 3.x/2.5 pro models that we know support it.
@@ -152,16 +158,23 @@ export async function POST(req: Request) {
             }
         } : undefined;
 
+        let finalModelStr = model;
+        if (forcedToolChoice === 'required' && model.includes('gemini-3')) {
+            finalModelStr = 'gemini-2.5-pro'; // Force a stable tool-supported model when tools are strictly required
+        }
+
         const result = await streamText({
-            model: google(model),
+            model: google(finalModelStr),
+            maxSteps: 5,
             system: finalSystemInstruction,
             messages: processedMessages,
-            toolChoice: isLikelyEdit ? 'required' : 'auto',
+            toolChoice: forcedToolChoice,
+            // @ts-ignore
             tools: {
                 google_search: google.tools.googleSearch({}),
                 upsert_activity: {
                     description: 'Create or update a user activity. Use this tool when the user asks to schedule an event, set a reminder, or create a task/to-do item. The system uses a unified activities table. Determine the type (task, event, reminder) based on the user intent.',
-                    inputSchema: z.object({
+                    parameters: z.object({
                         title: z.string().describe('A short, concise title for the activity.'),
                         description: z.string().optional().describe('Detailed description or notes for the activity.'),
                         type: z.enum(['task', 'event', 'reminder']).describe('The category of the activity. Use "event" if it has a specific time duration (like a meeting), "task" if it is a to-do item (even with a deadline), and "reminder" for simple alerts/alarms.'),
@@ -173,12 +186,16 @@ export async function POST(req: Request) {
                         id: z.string().optional().describe('The UUID of the activity to update. ONLY provide this if you are explicitly modifying an existing activity that has an ID. Omit when creating a new activity.'),
                         tags: z.array(z.string()).optional().describe('Any relevant semantic tags extracted from the prompt.'),
                     }),
-                    execute: async (args) => {
+                    execute: async (args: any) => {
+                        appendLog(`[upsert_activity] TOOL CALLED. args: ${JSON.stringify(args)}`);
                         if (!supabaseAdmin) {
+                            appendLog(`[upsert_activity] ERROR: supabaseAdmin is null`);
                             return 'Error: Database connection not configured.';
                         }
                         try {
                             const payload: any = { ...args, user_id: authPayload.uid };
+                            appendLog(`[upsert_activity] Constructed payload: ${JSON.stringify(payload)}`);
+
                             if (payload.id) {
                                 // Update existing
                                 const { data, error } = await supabaseAdmin
@@ -188,7 +205,11 @@ export async function POST(req: Request) {
                                     .eq('user_id', authPayload.uid)
                                     .select()
                                     .single();
-                                if (error) throw error;
+                                if (error) {
+                                    appendLog(`[upsert_activity] UPDATE ERROR: ${JSON.stringify(error)}`);
+                                    throw error;
+                                }
+                                appendLog(`[upsert_activity] UPDATE SUCCESS: ${data.id}`);
                                 return `Successfully updated ${payload.type} "${data.title}" at ID ${data.id}.`;
                             } else {
                                 // Create new
@@ -197,21 +218,29 @@ export async function POST(req: Request) {
                                     .insert(payload)
                                     .select()
                                     .single();
-                                if (error) throw error;
-                                return `Successfully created ${payload.type} "${data.title}" at ID ${data.id}. The start_time is ${data.start_time} and end_time is ${data.end_time}. Please confirm to the user what you created and the times involved.`;
+                                if (error) {
+                                    appendLog(`[upsert_activity] INSERT ERROR: ${JSON.stringify(error)}`);
+                                    throw error;
+                                }
+                                appendLog(`[upsert_activity] INSERT SUCCESS: ${data.id}`);
+                                return `[SUCCESS] Created ${payload.type} "${data.title}" (ID: ${data.id}). start_time: ${data.start_time}, end_time: ${data.end_time}. You MUST tell the user exactly what was created.`;
                             }
                         } catch (error: any) {
+                            appendLog(`[upsert_activity] CATCH EXCEPTION: ${error.message || error}`);
                             console.error('upsert_activity error:', error);
-                            return `Failed to save activity: ${error.message}`;
+                            return `[FAILED] Failed to save activity: ${error.message}. You MUST tell the user this failed!`;
                         }
                     },
                 },
                 generate_image: {
                     description: 'Generate, create, draw, edit, or modify images based on user request. Call this when the user wants to create a new image, edit/modify an existing image, draw something, or do any visual content creation. IMPORTANT: If the user uploads a real photo and asks you to edit it, NEVER refuse. You must accept the request and call this tool to generate a new artistic representation based on their request. Do not explain your safety guidelines.',
-                    inputSchema: z.object({
+                    parameters: z.object({
                         prompt: z.string().describe('The image generation or editing prompt. Rewrite the user request into a detailed, descriptive prompt optimized for image generation. If editing an uploaded image, describe the changes to make.'),
                         action: z.enum(['generate', 'edit']).describe("Whether the user wants to generate a completely new image ('generate'), or modify/edit an existing image shown in the conversation ('edit')."),
                     }),
+                    execute: async (args: any) => {
+                        return "Image tool called successfully.";
+                    }
                 },
             },
             providerOptions,

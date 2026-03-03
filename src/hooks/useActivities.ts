@@ -51,7 +51,7 @@ export function useActivities() {
         } finally {
             setIsLoading(false);
         }
-    }, [auth]);
+    }, [auth.isActivated, auth.getAuthHeaders]);
 
     const createActivity = async (activityData: Partial<Activity>) => {
         try {
