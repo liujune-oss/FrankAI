@@ -175,7 +175,7 @@ export async function POST(req: Request) {
                     parameters: z.object({
                         title: z.string().describe('A short, concise title for the activity.'),
                         description: z.string().optional().describe('Detailed description or notes for the activity.'),
-                        type: z.enum(['task', 'event', 'reminder']).describe('The category of the activity. Use "event" if it has a specific time duration (like a meeting), "task" if it is a to-do item (even with a deadline), and "reminder" for simple alerts/alarms.'),
+                        type: z.enum(['task', 'event', 'reminder']).optional().describe('The category of the activity. Use "event" if it has a specific time duration (like a meeting), "task" if it is a to-do item (even with a deadline), and "reminder" for simple alerts/alarms.'),
                         start_time: z.string().optional().describe('The start time in ISO 8601 format (e.g., "2026-03-02T15:00:00Z"). Required for events and reminders. Omit for tasks without a specific start time.'),
                         end_time: z.string().optional().describe('The end time or due date in ISO 8601 format. Required for events. For tasks, this acts as the deadline/due date.'),
                         is_all_day: z.boolean().optional().describe('True if the event lasts the entire day.'),
@@ -192,6 +192,21 @@ export async function POST(req: Request) {
                         }
                         try {
                             const payload: any = { ...args, user_id: authPayload.uid };
+
+                            // Handle AI model hallucinating "activity_type" instead of "type"
+                            if (payload.activity_type && !payload.type) {
+                                payload.type = payload.activity_type;
+                            }
+                            delete payload.activity_type;
+
+                            // Strip unknown fields
+                            const allowedKeys = ['id', 'user_id', 'type', 'title', 'description', 'start_time', 'end_time', 'is_all_day', 'location', 'priority', 'status', 'repetition_rule', 'tags', 'metadata'];
+                            Object.keys(payload).forEach(key => {
+                                if (!allowedKeys.includes(key)) {
+                                    delete payload[key];
+                                }
+                            });
+
                             appendLog(`[upsert_activity] Constructed payload: ${JSON.stringify(payload)}`);
 
                             if (payload.id) {
