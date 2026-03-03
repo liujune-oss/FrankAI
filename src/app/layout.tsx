@@ -53,9 +53,18 @@ export default function RootLayout({
                 mq.addEventListener('change', function(e) { applyTheme(e.matches); });
               })();
               if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                  navigator.serviceWorker.register('/sw.js').catch(() => {});
-                });
+                if ('${process.env.NODE_ENV}' === 'development') {
+                  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for (let registration of registrations) {
+                      registration.unregister();
+                      console.log('ServiceWorker unregistered in development mode.');
+                    }
+                  });
+                } else {
+                  window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js').catch(() => {});
+                  });
+                }
               }
             `,
           }}
