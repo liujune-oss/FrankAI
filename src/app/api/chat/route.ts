@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { google } from '@ai-sdk/google';
-import { streamText, tool } from 'ai';
+import { streamText, tool, stepCountIs } from 'ai';
 import { z } from 'zod';
 import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -163,7 +163,7 @@ export async function POST(req: Request) {
 
         const result = await streamText({
             model: google(finalModelStr),
-            maxSteps: 5,
+            stopWhen: stepCountIs(5),
             system: finalSystemInstruction,
             messages: processedMessages,
             toolChoice: forcedToolChoice,

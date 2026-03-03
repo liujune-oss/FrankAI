@@ -1,5 +1,10 @@
 # Gemini Chat — 发布记录
 
+## v1.8.27 — 2026-03-02
+- **修复：AI 驱动任务的空白回复问题**
+  - 在升级到 Vercel AI SDK v6 后，原有的 `maxSteps: 5` 参数被弃用，导致含有工具调用的多轮对话（特别是 `gemini-3-flash-preview`）在工具执行后提前中断，产生空白回复。
+  - **解决方案**：重构了后端的 `streamText` 调用，将 `maxSteps` 替换为 `stopWhen: stepCountIs(5)`，成功闭环了多轮调用，使模型能够生成并返回带上下文的友好文本。
+
 ## v1.8.20 — 2026-03-03
 - **新增：Sandbox 语音结构化验证室**
   - 在 Admin 控制台新增了专属测试环境，针对移动端的复杂语音环境设计了双阶段（Two-phase）抽取链路。将传统的杂乱口语录音通过 STT 转化为文本后，再由 `gemini-1.5-pro` 的 Function Calling 按设定 Schema 抽取为结构化 JSON。
