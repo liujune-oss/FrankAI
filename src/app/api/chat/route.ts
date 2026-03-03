@@ -147,8 +147,6 @@ export async function POST(req: Request) {
         const isActivity = lastUserContent.includes('创建') || lastUserContent.includes('提醒') || lastUserContent.includes('任务') || lastUserContent.includes('日历') || lastUserContent.includes('安排');
 
         let forcedToolChoice: any = 'auto';
-        if (isLikelyEdit) forcedToolChoice = 'required';
-        if (isActivity) forcedToolChoice = 'required';
 
         // Only send thinkingConfig if the model is capable (typically 2.0-flash-thinking, 2.5-pro, etc. But NOT deep-research)
         // We'll allow anything with 'thinking' in the name or the specific gemini 3.x/2.5 pro models that we know support it.
@@ -160,9 +158,8 @@ export async function POST(req: Request) {
         } : undefined;
 
         let finalModelStr = model;
-        if (forcedToolChoice === 'required' && model.includes('gemini-3')) {
-            finalModelStr = 'gemini-2.5-pro'; // Force a stable tool-supported model when tools are strictly required
-        }
+        // if tools must be strictly required, we used to fallback to gemini-2.5-pro here. 
+        // We keep the variable for consistency but do not force 'required' anymore to avoid empty text loops.
 
         const result = await streamText({
             model: google(finalModelStr),
