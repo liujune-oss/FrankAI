@@ -81,7 +81,7 @@ async function executeUpsertActivity(args: any, userId: string): Promise<string>
             const { data, error } = await supabaseAdmin.from('activities').insert(payload).select().single();
             if (error) { appendLog(`[upsert_activity] INSERT ERROR: ${JSON.stringify(error)}`); throw error; }
             appendLog(`[upsert_activity] INSERT SUCCESS: ${data.id}`);
-            return `[SUCCESS] Created ${payload.type} "${data.title}" (ID: ${data.id}). start_time: ${data.start_time}, end_time: ${data.end_time}. ALWAYS confirm this to the user in a friendly message.`;
+            return JSON.stringify({ status: 'success', action: 'created', type: data.type, title: data.title, id: data.id, start_time: data.start_time, end_time: data.end_time });
         }
     } catch (error: any) {
         appendLog(`[upsert_activity] CATCH EXCEPTION: ${error.message || error}`);
@@ -179,8 +179,12 @@ export async function POST(req: Request) {
         const systemNow = new Date();
         const systemTimeStr = '[CRITICAL CONTEXT] Current UTC time: ' + systemNow.toISOString() + ' (Shanghai = UTC+8, so current local time is ' + new Date(systemNow.getTime() + 8 * 3600000).toISOString().replace('Z', '+08:00') + '). When the user says today/tomorrow/next week, calculate based on this timestamp.';
         finalSystemInstruction = systemTimeStr + '\n\n' + finalSystemInstruction;
-        finalSystemInstruction += '\n\n[Tool Usage] When the user asks to create, schedule, remind, or log an activity, you MUST invoke the upsert_activity tool. After the tool executes successfully, reply with a friendly confirmation message summarizing what was created.';
-        finalSystemInstruction += '\n\n[Time Zone] All timestamps passed to upsert_activity MUST be in UTC (Z suffix). Shanghai is UTC+8, so 3 PM local = 07:00Z.';
+        finalSystemInstruction += '\n\n[Tool Usage Rules]\n' +
+            '1. ONLY call upsert_activity for activities explicitly requested in the CURRENT user message.\n' +
+            '2. NEVER call upsert_activity based on things mentioned in previous conversation turns — those have already been handled.\n' +
+            '3. After ALL tool calls in this turn complete, write ONE reply that summarizes ONLY what you just created in this turn.\n' +
+            '4. Do NOT mention anything from previous turns unless the user explicitly asks about it.';
+        finalSystemInstruction += '\n\n[Time Zone] All timestamps MUST be in UTC (Z suffix). Shanghai is UTC+8, so 8 PM local = 12:00Z.';
 
         // Convert messages to Google AI format
         const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
@@ -235,15 +239,20 @@ export async function POST(req: Request) {
         const stream = new ReadableStream({
             async start(controller) {
                 const enc = new TextEncoder();
-
-                function send(data: object) {
-                    controller.enqueue(enc.encode(sseEvent(data)));
-                }
+                function send(data: object) { controller.enqueue(enc.encode(sseEvent(data))); }
 
                 try {
                     send({ type: 'start' });
                     let currentParts = lastParts;
                     const MAX_STEPS = 5;
+
+                    // Collect all tool results across steps for isolated confirmation
+                    const allExecutedResults: { toolName: string; args: any; result: string }[] = [];
+                    let anyToolsExecuted = false;
+                    let anyTextStreamed = false;
+
+                    // Extract original user text for the isolated confirmation call
+                    const originalUserText = lastParts.filter((p: any) => p.text).map((p: any) => p.text).join('\n');
 
                     for (let step = 0; step < MAX_STEPS; step++) {
                         send({ type: 'start-step' });
@@ -259,11 +268,13 @@ export async function POST(req: Request) {
 
                             for (const part of candidate.content?.parts || []) {
                                 if (part.text) {
-                                    if (!hasText) {
-                                        send({ type: 'text-start', id: '0' });
-                                        hasText = true;
+                                    // Only stream text directly if NO tools have been executed yet.
+                                    // After tool execution, we use isolated confirmation (see Phase 2 below).
+                                    if (!anyToolsExecuted) {
+                                        if (!hasText) { send({ type: 'text-start', id: '0' }); hasText = true; }
+                                        send({ type: 'text-delta', id: '0', delta: part.text });
+                                        anyTextStreamed = true;
                                     }
-                                    send({ type: 'text-delta', id: '0', delta: part.text });
                                 } else if (part.functionCall) {
                                     const fc = part.functionCall;
                                     send({ type: 'tool-call', toolCallId: fc.name + '_' + step, toolName: fc.name, args: fc.args });
@@ -272,41 +283,31 @@ export async function POST(req: Request) {
                             }
                         }
 
-                        // Fallback: after stream exhausted, check the aggregated response.
-                        // After tool results, the model confirmation text often only appears
-                        // in result.response and NOT in individual stream chunks.
-                        if (!hasText && toolCalls.length === 0) {
+                        // result.response fallback: only for pure-text steps with no tools run yet
+                        if (!anyToolsExecuted && !hasText && toolCalls.length === 0) {
                             try {
                                 const finalResp = await result.response;
                                 const finalText = (finalResp.candidates?.[0]?.content?.parts || [])
-                                    .filter((p: any) => p.text)
-                                    .map((p: any) => p.text)
-                                    .join('');
+                                    .filter((p: any) => p.text).map((p: any) => p.text).join('');
                                 if (finalText) {
-                                    send({ type: 'text-start', id: '0' });
-                                    hasText = true;
+                                    send({ type: 'text-start', id: '0' }); hasText = true;
                                     send({ type: 'text-delta', id: '0', delta: finalText });
-                                    appendLog(`[step ${step}] Got text from result.response fallback (${finalText.length} chars)`);
+                                    anyTextStreamed = true;
                                 }
-                            } catch (e) {
-                                appendLog(`[step ${step}] result.response fallback error: ${e}`);
-                            }
+                            } catch (e) { appendLog(`result.response fallback error: ${e}`); }
                         }
 
-                        if (hasText) {
-                            send({ type: 'text-end', id: '0' });
-                        }
+                        if (hasText) send({ type: 'text-end', id: '0' });
 
                         if (toolCalls.length === 0) {
-                            // No tool calls, we're done
+                            // No more tool calls — loop ends here
                             send({ type: 'finish-step', finishReason: 'stop' });
-                            send({ type: 'finish', finishReason: 'stop' });
                             break;
                         }
 
                         send({ type: 'finish-step', finishReason: 'tool-calls' });
 
-                        // Execute tools and build function response parts for next turn
+                        // Execute tools
                         const funcResponseParts: any[] = [];
                         for (const toolCall of toolCalls) {
                             let toolResult = 'Tool executed.';
@@ -314,18 +315,62 @@ export async function POST(req: Request) {
                                 toolResult = await executeUpsertActivity(toolCall.args, authPayload.uid);
                             }
                             send({ type: 'tool-result', toolCallId: toolCall.name + '_' + step, toolName: toolCall.name, result: toolResult });
+                            allExecutedResults.push({ toolName: toolCall.name, args: toolCall.args, result: toolResult });
+
+                            let parsedResult: any = null;
+                            try { parsedResult = JSON.parse(toolResult); } catch { }
                             funcResponseParts.push({
                                 functionResponse: {
                                     name: toolCall.name,
-                                    response: { result: toolResult }
+                                    response: parsedResult || { result: toolResult }
                                 }
                             });
                         }
 
-                        // Next step: send tool results back to model
+                        anyToolsExecuted = true;
                         currentParts = funcResponseParts;
                     }
 
+                    // Phase 2: Isolated confirmation (only when tools were run)
+                    // Uses a FRESH model with NO history — only user message + current tool results.
+                    // This completely prevents the model from referencing previous turns.
+                    if (anyToolsExecuted && !anyTextStreamed) {
+                        send({ type: 'start-step' });
+
+                        const resultSummary = allExecutedResults.map(r => {
+                            try {
+                                const p = JSON.parse(r.result);
+                                const timeStr = p.start_time ? ` at ${p.start_time}` : '';
+                                return `- Created ${p.type}: "${p.title}"${timeStr}`;
+                            } catch { return `- ${r.toolName} executed`; }
+                        }).join('\n');
+
+                        const confirmModel = genAI.getGenerativeModel({
+                            model,
+                            systemInstruction: 'You are a helpful assistant. Write a short, friendly reply in the same language as the user. Be warm and personal. Do NOT add unnecessary lists or elaborate markdown unless the user asked for it.',
+                        });
+
+                        const confirmPrompt = 'User request: "' + originalUserText + '"\n\nWhat was just done:\n' + resultSummary + '\n\nWrite a brief, friendly confirmation to the user (1-3 sentences max).';
+                        const confirmResult = await confirmModel.generateContentStream({
+                            contents: [{ role: 'user', parts: [{ text: confirmPrompt }] }]
+                        });
+
+                        let confirmHasText = false;
+                        for await (const chunk of confirmResult.stream) {
+                            const candidate = chunk.candidates?.[0];
+                            if (!candidate) continue;
+                            for (const part of candidate.content?.parts || []) {
+                                if (part.text) {
+                                    if (!confirmHasText) { send({ type: 'text-start', id: '0' }); confirmHasText = true; }
+                                    send({ type: 'text-delta', id: '0', delta: part.text });
+                                }
+                            }
+                        }
+                        if (confirmHasText) send({ type: 'text-end', id: '0' });
+                        send({ type: 'finish-step', finishReason: 'stop' });
+                    }
+
+                    send({ type: 'finish', finishReason: 'stop' });
                     controller.enqueue(enc.encode('data: [DONE]\n\n'));
                 } catch (err: any) {
                     appendLog('Stream error: ' + err.message);
@@ -353,4 +398,5 @@ export async function POST(req: Request) {
         });
     }
 }
+
 

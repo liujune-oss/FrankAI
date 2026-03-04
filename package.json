@@ -1,6 +1,6 @@
 {
   "name": "gemini-chat-pwa",
-  "version": "1.8.34",
+  "version": "1.8.35",
   "private": true,
   "scripts": {
     "dev": "next dev",
