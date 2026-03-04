@@ -22,6 +22,10 @@ export default function TasksPage() {
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<BlobPart[]>([]);
 
+    // Custom Delete Dialog State
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [activityToDeleteId, setActivityToDeleteId] = useState<string | null>(null);
+
     useEffect(() => {
         getAllConversations().then(setConversations);
         getActiveConversationId().then(setActiveId);
@@ -43,9 +47,21 @@ export default function TasksPage() {
 
     const handleDelete = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (window.confirm("确定要删除这条记录吗？")) {
-            await deleteActivity(id);
+        setActivityToDeleteId(id);
+        setIsDeleteDialogOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (activityToDeleteId) {
+            await deleteActivity(activityToDeleteId);
         }
+        setIsDeleteDialogOpen(false);
+        setActivityToDeleteId(null);
+    };
+
+    const cancelDelete = () => {
+        setIsDeleteDialogOpen(false);
+        setActivityToDeleteId(null);
     };
 
     const handleSwitch = async (conv: Conversation) => {
@@ -90,7 +106,10 @@ export default function TasksPage() {
 
                     const sttRes = await fetch('/api/speech-to-text', {
                         method: 'POST',
-                        headers: { ...auth.getAuthHeaders() },
+                        headers: {
+                            'x-activation-token': auth.getAuthHeaders()['x-activation-token'],
+                            'x-device-fingerprint': auth.getAuthHeaders()['x-device-fingerprint']
+                        },
                         body: formData
                     });
 
@@ -265,6 +284,30 @@ export default function TasksPage() {
                     )}
                 </button>
             </div>
+
+            {/* Custom Delete Dialog */}
+            {isDeleteDialogOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+                        <h3 className="text-lg font-semibold text-zinc-100 mb-2">确认删除</h3>
+                        <p className="text-sm text-zinc-400 mb-6">您确定要删除这条记录吗？此操作无法撤销。</p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={cancelDelete}
+                                className="px-4 py-2 rounded-xl text-sm font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition-colors"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-red-500/80 hover:bg-red-500 transition-colors"
+                            >
+                                确认删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }

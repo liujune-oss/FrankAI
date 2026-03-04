@@ -197,6 +197,12 @@ export async function POST(req: Request) {
                         try {
                             // experimental model hallucination defense: unwrap nested activities array
                             let normalizedArgs = { ...args };
+                            if (typeof args === 'string') {
+                                try {
+                                    normalizedArgs = JSON.parse(args);
+                                } catch (e) { }
+                            }
+
                             if (normalizedArgs.activities && Array.isArray(normalizedArgs.activities) && normalizedArgs.activities.length > 0) {
                                 normalizedArgs = normalizedArgs.activities[0];
                             } else if (normalizedArgs.activity && typeof normalizedArgs.activity === 'object') {
@@ -210,6 +216,17 @@ export async function POST(req: Request) {
                                 payload.type = payload.activity_type;
                             }
                             delete payload.activity_type;
+
+                            // Handle AI model hallucinating "summary" instead of "title"
+                            if (payload.summary && !payload.title) {
+                                payload.title = payload.summary;
+                            }
+                            delete payload.summary;
+
+                            // Handle AI model missing title
+                            if (!payload.title || typeof payload.title !== 'string' || payload.title.trim() === '') {
+                                payload.title = "Untitled Activity";
+                            }
 
                             // Auto-infer type if the model forgot it
                             if (!payload.type) {
