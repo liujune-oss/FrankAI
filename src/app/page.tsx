@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useConversations } from "@/hooks/useConversations";
 import { useChatStream } from "@/hooks/useChatStream";
@@ -38,6 +38,7 @@ export default function ChatPage() {
   };
 
   const [isAdmin, setIsAdmin] = useState(false);
+  const [copiedDebug, setCopiedDebug] = useState(false);
   const [isSandboxOpen, setIsSandboxOpen] = useState(false);
 
   useEffect(() => {
@@ -68,6 +69,21 @@ export default function ChatPage() {
     model,
     systemInstruction: auth.systemInstruction,
   });
+
+  const copyDebugLog = useCallback(() => {
+    const text = chat.debugEvents.join('\n---\n');
+    // Use textarea fallback for compatibility on localhost (no HTTPS)
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.style.position = 'fixed';
+    el.style.opacity = '0';
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    setCopiedDebug(true);
+    setTimeout(() => setCopiedDebug(false), 2000);
+  }, [chat.debugEvents]);
 
   // Load model config from server
   useEffect(() => {
@@ -214,6 +230,40 @@ export default function ChatPage() {
             {toast.type === 'error' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>}
             {toast.type === 'info' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg>}
             {toast.message}
+          </div>
+        </div>
+      )}
+
+      {/* Debug Events Panel */}
+      {(chat.debugEvents.length > 0 || chat.isLoading) && (
+        <div className="absolute bottom-24 right-3 z-50 w-72 max-h-64 overflow-y-auto rounded-xl shadow-2xl border border-zinc-700/60 bg-zinc-900/95 backdrop-blur-md text-xs font-mono">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-700/50">
+            <span className="text-zinc-400 font-semibold tracking-wide">⚡ 实时流事件</span>
+            <div className="flex items-center gap-2">
+              <span className="text-zinc-500">{chat.debugEvents.length} 条</span>
+              {chat.debugEvents.length > 0 && (
+                <button
+                  onClick={copyDebugLog}
+                  className="text-zinc-400 hover:text-white transition-colors px-1.5 py-0.5 rounded text-[10px] border border-zinc-600 hover:border-zinc-400"
+                >
+                  {copiedDebug ? '✓ 已复制' : '复制'}
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="px-3 py-2 space-y-1">
+            {chat.isLoading && chat.debugEvents.length === 0 && (
+              <div className="text-zinc-500 animate-pulse">等待后端响应...</div>
+            )}
+            {chat.debugEvents.map((evt, i) => (
+              <div key={i} className={`whitespace-pre-wrap break-all leading-relaxed ${evt.includes('🔧') ? 'text-amber-400' :
+                evt.includes('✅') ? 'text-green-400' :
+                  evt.includes('❌') ? 'text-red-400' :
+                    evt.includes('🏁') ? 'text-blue-400' :
+                      evt.includes('▶️') ? 'text-cyan-400' :
+                        'text-zinc-400'
+                }`}>{evt}</div>
+            ))}
           </div>
         </div>
       )}

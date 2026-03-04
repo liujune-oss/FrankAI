@@ -32,6 +32,7 @@ export function useChatStream({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isImageGenerating, setIsImageGenerating] = useState(false);
     const [pendingImages, setPendingImages] = useState<{ data: string; mimeType: string }[]>([]);
+    const [debugEvents, setDebugEvents] = useState<string[]>([]);
 
     const lastSummarizedCount = useRef(0);
     const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -119,6 +120,7 @@ export function useChatStream({
         setIsThinking(true);
         setThinkingText("");
         setError(null);
+        setDebugEvents([]);
         userHasScrolledUp.current = false;
 
         let progressInterval: NodeJS.Timeout | null = null;
@@ -230,6 +232,7 @@ export function useChatStream({
                                         hasStartedText = true;
                                         setIsThinking(false);
                                     }
+                                    setDebugEvents(prev => [...prev, `📝 [文字输出开始]`]);
                                 } else if (payload.type === "text-delta") {
                                     if (!hasStartedText) {
                                         hasStartedText = true;
@@ -242,11 +245,21 @@ export function useChatStream({
                                 ) {
                                     thinkingContent += payload.delta || payload.text || "";
                                     setThinkingText(thinkingContent);
-                                } else if (payload.type === "tool-call" && payload.toolName === "generate_image") {
-                                    // Model decided to generate an image!
-                                    toolCallDetected = payload.args || { prompt: text };
-                                } else if (payload.type === "start-step" || payload.type === "finish-step") {
-                                    // Multi-step SDK lifecycle events, ignore
+                                } else if (payload.type === "tool-call") {
+                                    const toolLog = `🔧 [工具调用] ${payload.toolName}\n参数: ${JSON.stringify(payload.args, null, 2)}`;
+                                    setDebugEvents(prev => [...prev, toolLog]);
+                                    if (payload.toolName === "generate_image") {
+                                        toolCallDetected = payload.args || { prompt: text };
+                                    }
+                                } else if (payload.type === "tool-result") {
+                                    const resultLog = `✅ [工具结果] ${payload.toolName}\n结果: ${JSON.stringify(payload.result)}`;
+                                    setDebugEvents(prev => [...prev, resultLog]);
+                                } else if (payload.type === "start-step") {
+                                    setDebugEvents(prev => [...prev, `▶️ [新步骤开始]`]);
+                                } else if (payload.type === "finish-step") {
+                                    setDebugEvents(prev => [...prev, `⏹️ [步骤结束] 原因: ${payload.finishReason || 'unknown'}`]);
+                                } else if (payload.type === "finish") {
+                                    setDebugEvents(prev => [...prev, `🏁 [流结束] 原因: ${payload.finishReason || 'unknown'}`]);
                                 } else if (payload.errorText) {
                                     throw new Error(payload.errorText);
                                 }
@@ -455,5 +468,6 @@ export function useChatStream({
         handleImageUpload,
         sendMessage,
         stopGeneration,
+        debugEvents,
     };
 }
