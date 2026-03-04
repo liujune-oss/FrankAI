@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
+import { checkImageRateLimit } from '@/lib/ratelimit';
 import { getConfig } from '@/lib/config';
 
 export const maxDuration = 120;
@@ -9,8 +10,14 @@ const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY
 export async function POST(req: Request) {
     // Auth check
     const { token, fingerprint } = getAuthFromHeaders(req);
-    if (!await verifyToken(token, fingerprint)) {
+    const authPayload = await verifyToken(token, fingerprint);
+    if (!authPayload) {
         return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { limited } = await checkImageRateLimit(authPayload.uid);
+    if (limited) {
+        return Response.json({ error: 'Too Many Requests' }, { status: 429 });
     }
 
     try {

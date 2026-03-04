@@ -1,5 +1,6 @@
 ﻿// @ts-nocheck
 import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
+import { checkChatRateLimit } from '@/lib/ratelimit';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { supabaseAdmin } from '@/lib/supabase';
 import { appendLog } from './logger';
@@ -100,6 +101,11 @@ export async function POST(req: Request) {
     const authPayload = await verifyToken(token, fingerprint);
     if (!authPayload || !authPayload.uid) {
         return new Response('Unauthorized', { status: 401 });
+    }
+
+    const { limited } = await checkChatRateLimit(authPayload.uid);
+    if (limited) {
+        return new Response('Too Many Requests', { status: 429 });
     }
 
     try {

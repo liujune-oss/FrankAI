@@ -173,6 +173,9 @@ export function useChatStream({
                     handleUnauthorized();
                     return;
                 }
+                if (response.status === 429) {
+                    throw new Error('请求过于频繁，请稍后再试（每分钟最多 10 次）');
+                }
 
                 // Try parsing backend JSON error to surface exact Gemini exceptions
                 let backendMsg = `HTTP Error: ${response.status}`;
@@ -398,6 +401,9 @@ export function useChatStream({
                     if (imgResponse.status === 401) {
                         handleUnauthorized();
                         return;
+                    }
+                    if (imgResponse.status === 429) {
+                        throw new Error('图片生成请求过于频繁，请稍后再试（每分钟最多 5 次）');
                     }
                     const errData = await imgResponse.json().catch(() => ({}));
                     throw new Error(errData.error || `Image Gen Error: ${imgResponse.status}`);
