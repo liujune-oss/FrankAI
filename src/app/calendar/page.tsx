@@ -7,6 +7,8 @@ import { getAllConversations, getActiveConversationId, setActiveConversationId, 
 import { useActivities, Activity } from "@/hooks/useActivities";
 import { isSameDay, addDays, format, startOfToday, parseISO } from "date-fns";
 
+import { Trash2 } from "lucide-react";
+
 export default function CalendarPage() {
     const auth = useAuth();
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -17,7 +19,7 @@ export default function CalendarPage() {
     // Default selected date to today
     const [selectedDate, setSelectedDate] = useState<Date>(startOfToday());
 
-    const { activities, fetchActivities, isLoading } = useActivities();
+    const { activities, fetchActivities, isLoading, deleteActivity } = useActivities();
 
     useEffect(() => {
         getAllConversations().then(setConversations);
@@ -32,10 +34,10 @@ export default function CalendarPage() {
         }
     }, [auth.isActivated, fetchActivities]);
 
-    // Generate upcoming dates (e.g., today + next 14 days)
+    // Generate upcoming dates (e.g., yesterday + next 14 days)
     const dateTape = useMemo(() => {
         const today = startOfToday();
-        const start = addDays(today, -3); // start 3 days ago for some past context
+        const start = addDays(today, -1); // start 1 day ago (yesterday)
         return Array.from({ length: 30 }).map((_, i) => addDays(start, i));
     }, []);
 
@@ -60,6 +62,13 @@ export default function CalendarPage() {
         window.location.href = '/';
     };
 
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (window.confirm("确定要删除这条记录吗？")) {
+            await deleteActivity(id);
+        }
+    };
+
     if (!auth.isActivated) return null;
 
     // Build dots and group activities by day
@@ -70,6 +79,7 @@ export default function CalendarPage() {
             if (a.type === 'task') colors.add('bg-emerald-500');
             else if (a.type === 'event') colors.add('bg-blue-500');
             else if (a.type === 'reminder') colors.add('bg-pink-500');
+            else if (a.type === 'log') colors.add('bg-purple-500');
         });
         return Array.from(colors);
     };
@@ -164,6 +174,7 @@ export default function CalendarPage() {
                             if (activity.type === 'task') { bgClass = "bg-emerald-500/10 border-emerald-500/20 border-l-emerald-500"; textClass = "text-emerald-100"; subtitleClass = "text-emerald-400/80"; }
                             else if (activity.type === 'event') { bgClass = "bg-blue-500/10 border-blue-500/20 border-l-blue-500"; textClass = "text-blue-100"; subtitleClass = "text-blue-400/80"; }
                             else if (activity.type === 'reminder') { bgClass = "bg-pink-500/10 border-pink-500/20 border-l-pink-500"; textClass = "text-pink-100"; subtitleClass = "text-pink-400/80"; }
+                            else if (activity.type === 'log') { bgClass = "bg-purple-500/10 border-purple-500/20 border-l-purple-500"; textClass = "text-purple-100"; subtitleClass = "text-purple-400/80"; }
 
                             const actDate = getActivityDate(activity);
 
@@ -178,8 +189,12 @@ export default function CalendarPage() {
                                             {activity.type === 'task' ? 'Due Date' : ''}
                                             {activity.type === 'event' && activity.start_time && activity.end_time ? `${format(parseISO(activity.start_time), 'HH:mm')} - ${format(parseISO(activity.end_time), 'HH:mm')}` : ''}
                                             {activity.type === 'reminder' ? 'Reminder' : ''}
+                                            {activity.type === 'log' ? 'Log Entry' : ''}
                                         </span>
                                     </div>
+                                    <button onClick={(e) => handleDelete(activity.id, e)} className="p-2 shrink-0 text-zinc-500 hover:text-red-400 transition-colors my-auto ml-1">
+                                        <Trash2 size={18} />
+                                    </button>
                                 </div>
                             );
                         })

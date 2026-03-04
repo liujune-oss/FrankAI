@@ -161,6 +161,10 @@ export async function POST(req: Request) {
         // if tools must be strictly required, we used to fallback to gemini-2.5-pro here. 
         // We keep the variable for consistency but do not force 'required' anymore to avoid empty text loops.
 
+        const systemNow = new Date();
+        const systemTimeStr = `[CRITICAL CONTEXT] 当前系统实时时间：${systemNow.toISOString()} (如果是下午时间，请自行换算为24小时制，当前本地时间处于东八区，当前绝对时间戳为 ${systemNow.toISOString()})。\n当用户提到“明天”、“下周”等时间词，必须以此时间为基准进行ISO-8601计算。`;
+        finalSystemInstruction = `${systemTimeStr}\n\n${finalSystemInstruction}`;
+
         const result = await streamText({
             model: google(finalModelStr),
             stopWhen: stepCountIs(5),
@@ -175,7 +179,7 @@ export async function POST(req: Request) {
                     parameters: z.object({
                         title: z.string().describe('A short, concise title for the activity.'),
                         description: z.string().optional().describe('Detailed description or notes for the activity.'),
-                        type: z.enum(['task', 'event', 'reminder']).optional().describe('The category of the activity. Use "event" if it has a specific time duration (like a meeting), "task" if it is a to-do item (even with a deadline), and "reminder" for simple alerts/alarms.'),
+                        type: z.enum(['task', 'event', 'reminder', 'log']).optional().describe('The category of the activity. Use "event" if it has a specific time duration (like a meeting), "task" if it is a to-do item (even with a deadline), "reminder" for simple alerts, and "log" for journals/diaries/records.'),
                         start_time: z.string().optional().describe('The start time in ISO 8601 format (e.g., "2026-03-02T15:00:00Z"). Required for events and reminders. Omit for tasks without a specific start time.'),
                         end_time: z.string().optional().describe('The end time or due date in ISO 8601 format. Required for events. For tasks, this acts as the deadline/due date.'),
                         is_all_day: z.boolean().optional().describe('True if the event lasts the entire day.'),
@@ -214,6 +218,19 @@ export async function POST(req: Request) {
                                 } else {
                                     payload.type = 'task'; // fallback
                                 }
+                            }
+
+                            // Task vs Event time correction
+                            if (payload.type === 'task' && !payload.end_time && payload.start_time) {
+                                payload.end_time = payload.start_time;
+                                payload.start_time = null;
+                            }
+
+                            if (payload.type === 'event' && !payload.end_time && payload.start_time) {
+                                // Default event duration 1 hour if not specified
+                                const start = new Date(payload.start_time);
+                                start.setHours(start.getHours() + 1);
+                                payload.end_time = start.toISOString();
                             }
 
                             // Strip unknown fields

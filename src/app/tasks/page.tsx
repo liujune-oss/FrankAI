@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import ConversationDrawer from "@/components/ConversationDrawer";
 import { getAllConversations, getActiveConversationId, setActiveConversationId, Conversation } from "@/lib/conversations";
-import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell } from "lucide-react";
+import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, Trash2, FileText } from "lucide-react";
 import { useActivities, Activity } from "@/hooks/useActivities";
 
 export default function TasksPage() {
@@ -13,7 +13,8 @@ export default function TasksPage() {
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [activeId, setActiveId] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);
-    const { activities, fetchActivities, isLoading, updateActivity } = useActivities();
+    const { activities, fetchActivities, isLoading, updateActivity, deleteActivity } = useActivities();
+    const [filter, setFilter] = useState<'all' | 'task' | 'event' | 'log'>('all');
 
     useEffect(() => {
         getAllConversations().then(setConversations);
@@ -29,8 +30,16 @@ export default function TasksPage() {
     }, [auth.isActivated, fetchActivities]);
 
     const handleToggleStatus = async (activity: Activity) => {
+        if (activity.type === 'log') return; // Logs don't have completion status in the same way
         const newStatus = activity.status === 'completed' ? 'needs_action' : 'completed';
         await updateActivity(activity.id, { status: newStatus });
+    };
+
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (window.confirm("确定要删除这条记录吗？")) {
+            await deleteActivity(id);
+        }
     };
 
     const handleSwitch = async (conv: Conversation) => {
@@ -75,14 +84,34 @@ export default function TasksPage() {
                 <div className="w-8" />
             </header>
 
+            {/* Filters */}
+            <div className="flex items-center gap-2 px-4 py-2 overflow-x-auto no-scrollbar flex-none">
+                <button
+                    onClick={() => setFilter('all')}
+                    className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${filter === 'all' ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}
+                >全部</button>
+                <button
+                    onClick={() => setFilter('task')}
+                    className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${filter === 'task' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}
+                >待办</button>
+                <button
+                    onClick={() => setFilter('event')}
+                    className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${filter === 'event' ? 'bg-blue-500/20 text-blue-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}
+                >日程</button>
+                <button
+                    onClick={() => setFilter('log')}
+                    className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${filter === 'log' ? 'bg-purple-500/20 text-purple-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}
+                >随手记</button>
+            </div>
+
             {/* List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {isLoading ? (
                     <div className="text-center text-sm text-zinc-500 py-10">加载中...</div>
-                ) : activities.length === 0 ? (
-                    <div className="text-center text-sm text-zinc-500 py-10">暂无待办事项</div>
+                ) : activities.filter(a => filter === 'all' || a.type === filter).length === 0 ? (
+                    <div className="text-center text-sm text-zinc-500 py-10">暂无{filter === 'all' ? '待办事项' : filter === 'task' ? '待办事项' : filter === 'event' ? '日程安排' : '随手记录'}</div>
                 ) : (
-                    activities.map((activity) => {
+                    activities.filter(a => filter === 'all' || a.type === filter).map((activity) => {
                         const isCompleted = activity.status === 'completed';
 
                         let bgClass = "bg-zinc-900 border-white/5";
@@ -91,21 +120,28 @@ export default function TasksPage() {
                             if (activity.type === 'task') { bgClass = "bg-emerald-500/10 border-emerald-500/20"; typeColor = "text-emerald-400 bg-emerald-500/10"; }
                             if (activity.type === 'event') { bgClass = "bg-blue-500/10 border-blue-500/20"; typeColor = "text-blue-400 bg-blue-500/10"; }
                             if (activity.type === 'reminder') { bgClass = "bg-pink-500/10 border-pink-500/20"; typeColor = "text-pink-400 bg-pink-500/10"; }
+                            if (activity.type === 'log') { bgClass = "bg-purple-500/10 border-purple-500/20"; typeColor = "text-purple-400 bg-purple-500/10"; }
                         } else {
                             bgClass = "bg-zinc-500/10 border-white/5 opacity-50";
                         }
 
                         return (
                             <div key={activity.id} className={`w-full flex items-center p-4 gap-3 rounded-xl border ${bgClass}`}>
-                                <button onClick={() => handleToggleStatus(activity)} className="flex-shrink-0">
-                                    {isCompleted ? (
-                                        <CheckSquare size={20} className="text-emerald-500" />
+                                <div className="flex-shrink-0">
+                                    {activity.type === 'log' ? (
+                                        <div className="w-5 h-5 flex items-center justify-center pt-0.5"><FileText size={18} className="text-purple-500/50" /></div>
                                     ) : (
-                                        <Square size={20} className={activity.type === 'task' ? 'text-emerald-500/50' : activity.type === 'event' ? 'text-blue-500/50' : 'text-pink-500/50'} />
+                                        <button onClick={() => handleToggleStatus(activity)} className="flex items-center justify-center">
+                                            {isCompleted ? (
+                                                <CheckSquare size={20} className="text-emerald-500" />
+                                            ) : (
+                                                <Square size={20} className={activity.type === 'task' ? 'text-emerald-500/50' : activity.type === 'event' ? 'text-blue-500/50' : 'text-pink-500/50'} />
+                                            )}
+                                        </button>
                                     )}
-                                </button>
+                                </div>
                                 <div className="flex flex-col gap-1 w-full min-w-0">
-                                    <span className={`text-[15px] font-medium truncate ${isCompleted ? 'text-zinc-500 line-through' : (activity.type === 'task' ? 'text-emerald-100' : activity.type === 'event' ? 'text-blue-100' : 'text-pink-100')}`}>
+                                    <span className={`text-[15px] font-medium truncate ${isCompleted ? 'text-zinc-500 line-through' : (activity.type === 'task' ? 'text-emerald-100' : activity.type === 'event' ? 'text-blue-100' : activity.type === 'log' ? 'text-purple-100' : 'text-pink-100')}`}>
                                         {activity.title}
                                     </span>
                                     <div className="flex items-center gap-2 flex-wrap">
@@ -121,6 +157,9 @@ export default function TasksPage() {
                                         </span>
                                     </div>
                                 </div>
+                                <button onClick={(e) => handleDelete(activity.id, e)} className="p-2 ml-auto shrink-0 text-zinc-500 hover:text-red-400 transition-colors">
+                                    <Trash2 size={18} />
+                                </button>
                             </div>
                         );
                     })

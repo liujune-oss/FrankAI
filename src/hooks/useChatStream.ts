@@ -423,6 +423,12 @@ export function useChatStream({
             setIsImageGenerating(false);
             setThinkingText("");
             abortControllerRef.current = null;
+
+            // Broadcast a custom event so Tasks/Calendar views know a chat just finished
+            // and might have inserted new data in the background.
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new Event('chat_response_completed'));
+            }
         }
     }, [messages, pendingImages, isLoading, getAuthHeaders, handleUnauthorized, model, systemInstruction, setMessages, saveMessages]);
 
