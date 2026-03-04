@@ -223,7 +223,14 @@ export function useChatStream({
                             if (raw === "[DONE]") continue;
                             try {
                                 const payload = JSON.parse(raw);
-                                if (payload.type === "text-delta") {
+                                // New SDK v6 format: type-based events
+                                if (payload.type === "text-start") {
+                                    // Marks the beginning of a new text part; exit thinking mode
+                                    if (!hasStartedText) {
+                                        hasStartedText = true;
+                                        setIsThinking(false);
+                                    }
+                                } else if (payload.type === "text-delta") {
                                     if (!hasStartedText) {
                                         hasStartedText = true;
                                         setIsThinking(false);
@@ -238,6 +245,8 @@ export function useChatStream({
                                 } else if (payload.type === "tool-call" && payload.toolName === "generate_image") {
                                     // Model decided to generate an image!
                                     toolCallDetected = payload.args || { prompt: text };
+                                } else if (payload.type === "start-step" || payload.type === "finish-step") {
+                                    // Multi-step SDK lifecycle events, ignore
                                 } else if (payload.errorText) {
                                     throw new Error(payload.errorText);
                                 }
@@ -249,6 +258,7 @@ export function useChatStream({
                                     throw e;
                             }
                         } else if (line.startsWith("0:")) {
+                            // Legacy SDK format
                             try {
                                 const delta = JSON.parse(line.substring(2));
                                 if (!hasStartedText) {
@@ -258,7 +268,7 @@ export function useChatStream({
                                 streamedContent += delta;
                             } catch (e) { }
                         } else if (line.startsWith("9:")) {
-                            // Tool call format: 9:{"toolCallId":...,"toolName":"generate_image","args":{...}}
+                            // Legacy Tool call format: 9:{"toolCallId":...,"toolName":"generate_image","args":{...}}
                             try {
                                 const toolCall = JSON.parse(line.substring(2));
                                 if (toolCall.toolName === "generate_image") {
