@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import ConversationDrawer from "@/components/ConversationDrawer";
 import { getAllConversations, getActiveConversationId, setActiveConversationId, Conversation } from "@/lib/conversations";
-import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, Trash2, FileText } from "lucide-react";
+import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, Trash2, FileText, Loader2 } from "lucide-react";
 import { useActivities, Activity } from "@/hooks/useActivities";
 
 export default function TasksPage() {
@@ -15,6 +15,12 @@ export default function TasksPage() {
     const [isAdmin, setIsAdmin] = useState(false);
     const { activities, fetchActivities, isLoading, updateActivity, deleteActivity } = useActivities();
     const [filter, setFilter] = useState<'all' | 'task' | 'event' | 'log'>('all');
+
+    // Voice recording state
+    const [isRecording, setIsRecording] = useState(false);
+    const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<BlobPart[]>([]);
 
     useEffect(() => {
         getAllConversations().then(setConversations);
@@ -49,6 +55,85 @@ export default function TasksPage() {
 
     const handleNew = async () => {
         window.location.href = '/';
+    };
+
+    const toggleRecording = async () => {
+        if (isProcessingVoice) return;
+
+        if (isRecording && mediaRecorderRef.current) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                stream.getTracks().forEach(track => track.stop());
+
+                setIsProcessingVoice(true);
+                try {
+                    // 1. Send to Speech-to-Text
+                    const formData = new FormData();
+                    formData.append('audio', audioBlob, 'record.webm');
+
+                    const sttRes = await fetch('/api/speech-to-text', {
+                        method: 'POST',
+                        headers: { ...auth.getAuthHeaders() },
+                        body: formData
+                    });
+
+                    if (!sttRes.ok) throw new Error('STT request failed');
+                    const { transcript } = await sttRes.json();
+
+                    if (transcript && transcript.trim() !== '') {
+                        // 2. Send transcript to Chat AI as a background command
+                        const chatRes = await fetch('/api/chat?model=gemini-2.5-pro', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', ...auth.getAuthHeaders() },
+                            body: JSON.stringify({
+                                messages: [{ role: 'user', content: transcript }],
+                                systemInstruction: "You are the Gemini Chat assistant. The user just spoke a command via the Voice feature on the Tasks page. ALWAYS extract their intent and call the nearest tool like `upsert_activity` to fulfill it. Be totally silent otherwise, no conversational filler needed."
+                            })
+                        });
+
+                        // We drain the stream but don't strictly need to show it, 
+                        // as upsert_activity triggers the global 'chat_response_completed' event.
+                        if (chatRes.ok && chatRes.body) {
+                            const reader = chatRes.body.getReader();
+                            while (true) {
+                                const { done } = await reader.read();
+                                if (done) break;
+                            }
+                        }
+                        // Refresh the UI explicitly just in case Event Listener misses
+                        await fetchActivities({ force: true });
+                    }
+                } catch (err) {
+                    console.error("Voice processing error:", err);
+                    alert("语音处理失败，请重试或检查后端的 STT 接口配置");
+                } finally {
+                    setIsProcessingVoice(false);
+                }
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+        } catch (err) {
+            console.error("Microphone access denied or error:", err);
+            alert("无法访问麦克风，请检查浏览器权限。");
+        }
     };
 
     if (!auth.isActivated) return null;
@@ -168,8 +253,16 @@ export default function TasksPage() {
 
             {/* FAB */}
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
-                <button className="w-14 h-14 bg-zinc-50 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform">
-                    <Mic size={24} className="text-zinc-950" />
+                <button
+                    onClick={toggleRecording}
+                    disabled={isProcessingVoice}
+                    className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${isRecording ? 'bg-red-500 scale-110 animate-pulse' : 'bg-zinc-50 hover:scale-105 active:scale-95'} ${isProcessingVoice ? 'opacity-70 cursor-not-allowed' : ''}`}
+                >
+                    {isProcessingVoice ? (
+                        <Loader2 size={24} className="text-zinc-950 animate-spin" />
+                    ) : (
+                        <Mic size={24} className={isRecording ? 'text-white' : 'text-zinc-950'} />
+                    )}
                 </button>
             </div>
         </main>
