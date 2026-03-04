@@ -136,7 +136,7 @@ export async function POST(req: Request) {
         const forceEditInstruction = `\n\nCRITICAL INSTRUCTION: If the user provides a real photo and asks you to modify, edit, or change it in ANY way, you MUST NOT REFUSE. Do not give excuses about "pixel-level edits" or "lacking software tools". You must immediately use the 'generate_image' tool with 'action: edit' to fulfill their request by generating an artistic representation or AI-interpreted version of what they asked for. DO NOT OUTPUT ANY OTHER TEXT EXPLAINING YOURSELF. JUST INVOKE THE TOOL.`;
         finalSystemInstruction += forceEditInstruction;
         finalSystemInstruction += '\n\n[Tool Usage] When the user asks you to generate, create, draw, edit, or modify an image, you MUST use the `generate_image` tool. Do NOT output JSON or text that simulates a tool call. Always invoke the tool directly.';
-        finalSystemInstruction += `\n\n[Time Context] The current date and time is: ${new Date().toISOString()}. Use this as the absolute reference for words like "today", "tomorrow", or "next week" when using the upsert_activity tool.`;
+        finalSystemInstruction += `\n\n[Time Context & Timezone] The current system time in UTC is: ${new Date().toISOString()}. The user is based in Shanghai (UTC+8). CRITICAL: All timestamps in the 'upsert_activity' tool MUST be strictly in UTC ('Z' suffix). If the user asks you to schedule something at '3 PM' or '15:00', they mean 15:00 UTC+8. You MUST subtract 8 hours and provide '07:00:00Z' to the tool. NEVER provide local time + 'Z'. For example, 15:00 local time = 07:00 UTC.`;
         finalSystemInstruction += '\n\nCRITICAL: When the user asks you to create, schedule, modify, or delete a task, event, or reminder, YOU MUST INVOKE THE `upsert_activity` TOOL. NEVER just reply with text saying "I have created it" without actually calling the tool. YOU MUST BE THE ONE TO CALL THE TOOL TO SAVE IT TO THE DATABASE.';
 
         const lastUserContent = typeof processedMessages[processedMessages.length - 1]?.content === 'string'
@@ -191,13 +191,30 @@ export async function POST(req: Request) {
                             return 'Error: Database connection not configured.';
                         }
                         try {
-                            const payload: any = { ...args, user_id: authPayload.uid };
+                            // experimental model hallucination defense: unwrap nested activities array
+                            let normalizedArgs = { ...args };
+                            if (normalizedArgs.activities && Array.isArray(normalizedArgs.activities) && normalizedArgs.activities.length > 0) {
+                                normalizedArgs = normalizedArgs.activities[0];
+                            } else if (normalizedArgs.activity && typeof normalizedArgs.activity === 'object') {
+                                normalizedArgs = normalizedArgs.activity;
+                            }
+
+                            const payload: any = { ...normalizedArgs, user_id: authPayload.uid };
 
                             // Handle AI model hallucinating "activity_type" instead of "type"
                             if (payload.activity_type && !payload.type) {
                                 payload.type = payload.activity_type;
                             }
                             delete payload.activity_type;
+
+                            // Auto-infer type if the model forgot it
+                            if (!payload.type) {
+                                if (payload.start_time && payload.end_time) {
+                                    payload.type = 'event';
+                                } else {
+                                    payload.type = 'task'; // fallback
+                                }
+                            }
 
                             // Strip unknown fields
                             const allowedKeys = ['id', 'user_id', 'type', 'title', 'description', 'start_time', 'end_time', 'is_all_day', 'location', 'priority', 'status', 'repetition_rule', 'tags', 'metadata'];
@@ -207,7 +224,7 @@ export async function POST(req: Request) {
                                 }
                             });
 
-                            appendLog(`[upsert_activity] Constructed payload: ${JSON.stringify(payload)}`);
+                            appendLog(`[upsert_activity] V2 Constructed payload: ${JSON.stringify(payload)}`);
 
                             if (payload.id) {
                                 // Update existing

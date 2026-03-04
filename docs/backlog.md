@@ -1,6 +1,6 @@
 # Gemini Chat — Backlog
 
-> 最后更新：2026-03-03
+> 最后更新：2026-03-04
 
 ## 待开发功能
 
@@ -24,8 +24,14 @@
 - [ ] **自定义主题色** — 支持手动选择主题风格
 - [ ] **manifest.json 优化** — 更新 related_applications 和图标尺寸 (512x512)
 
-## 已知问题
+## 已处理的技术沉淀与已知 Bug
 
+- [x] **Gemini-3 实验性模型 JSON 格式幻觉 (JSON Structure Hallucination)**
+  - **症状**：调用 `upsert_activity` 时，模型没有直接抛出 `title`, `start_time` 等顶层参数，而是自己凭空捏造了一个 `{"activities": [{...}]}` 数组把参数包在了里面，导致后端校验丢失必填项 `title` 报 23502 错误。同时模型无视了工具返回的错误信息，向用户强行邀功“已成功添加”。
+  - **解法**：在 `route.ts` 中增强了参数展开逻辑 (`unwrap`)，兼容并自动提取第一层的 `activities[0]` 或 `activity` 对象。
+- [x] **Gemini 幻觉生成的未知字段拦截**
+  - **症状**：模型有时会捏造不存在的枚举字段（如把 `type` 错认为 `activity_type`），导致 Supabase 报 `PGRST204` schema 错误。
+  - **解法**：后端加入硬编码映射 (`activity_type` -> `type`) 并增加 schema 字段过滤白名单。
 - [ ] 无速率限制 — API 路由缺少请求频率控制
 - [ ] 大量会话时列表性能 — `getAllConversations()` 逐一读取，无分页
 - [x] 向量记忆 HNSW 索引 — 已决定维持全表精确扫描以保证 100% 召回率
