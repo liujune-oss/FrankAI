@@ -11,6 +11,11 @@
 3. 读 `memory/MEMORY.md` — 加载项目知识
 4. 确认当前版本：`version.json`
 
+> 涉及相关模块时按需阅读：
+> - 技术实现细节 → `docs/technical.md`
+> - 记忆架构设计 → `docs/memory-architecture-v2.md`
+> - 历史变更记录 → `docs/changelog.md`
+
 ---
 
 ## 版本管理
@@ -63,9 +68,11 @@
 ## 工作流规范
 
 - 修改完成后先跑 `npm run build` 验证无编译错误，再提交
-- 每次会话结束时更新 `TODO.md` 和 `BACKLOG.md`
+- 每次会话结束时更新以下文档：
   - `TODO.md`：只放当前正在做的事（≤10条），完成后移到 BACKLOG 已完成区
   - `BACKLOG.md`：新发现的 Bug/需求/技术债都加在这里，不要堆进 TODO
+  - `docs/changelog.md`：每个版本发布后追加记录
+  - `docs/technical.md`：架构或关键模块有变更时同步更新
 - 重要架构变更写入 `memory/MEMORY.md`
 - 提交时只 stage 相关文件，不用 `git add -A`
 
@@ -83,6 +90,12 @@
 | `src/lib/config.ts` | app_config 读写 |
 | `src/lib/conversations.ts` | IndexedDB CRUD |
 | `src/middleware.ts` | Admin 路由保护 |
+| `src/app/api/memory/sync/route.ts` | 记忆增量同步端点 |
 | `version.json` | 版本号 |
 | `TODO.md` | 当前任务（≤10条，短期） |
 | `BACKLOG.md` | 全量待办、Bug、功能构想 |
+| `docs/technical.md` | 技术实现文档（架构/模块/DB/目录） |
+| `docs/memory-architecture-v2.md` | 三层记忆架构设计文档 |
+| `docs/changelog.md` | 版本发布记录 |
+| `scripts/test-chat-flow.mjs` | 工具调用循环本地单元测试 |
+| `supabase/memory_v2_migration.sql` | 记忆架构 v2 迁移 SQL |
