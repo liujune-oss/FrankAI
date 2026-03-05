@@ -360,7 +360,10 @@ export async function POST(req: Request) {
                         }
 
                         anyToolsExecuted = true;
-                        currentParts = funcResponseParts;
+                        // Break immediately after tool execution — Phase 2 handles confirmation.
+                        // Without this, the loop feeds function responses back to the model,
+                        // causing it to call upsert_activity again (duplicate entries).
+                        break;
                     }
 
                     // Phase 2: Isolated confirmation (only when tools were run)
