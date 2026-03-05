@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 import { ChatMessage } from "@/types/chat";
 
 interface MessageListProps {
@@ -134,8 +135,24 @@ export default function MessageList({
                                         }`}
                                 >
                                     {m.role === "assistant" ? (
-                                        <div className="prose prose-sm dark:prose-invert prose-p:leading-relaxed max-w-none">
-                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        <div className="prose prose-sm dark:prose-invert prose-p:leading-relaxed max-w-none prose-pre:p-0 prose-pre:bg-transparent">
+                                            <ReactMarkdown
+                                                remarkPlugins={[remarkGfm]}
+                                                rehypePlugins={[rehypeHighlight]}
+                                                components={{
+                                                    pre: ({ children }) => (
+                                                        <pre className="rounded-xl overflow-x-auto text-[13px] my-2">{children}</pre>
+                                                    ),
+                                                    code: ({ className, children, ...props }) => {
+                                                        const isBlock = className?.startsWith('language-');
+                                                        return isBlock ? (
+                                                            <code className={`${className ?? ''} block px-4 py-3`} {...props}>{children}</code>
+                                                        ) : (
+                                                            <code className="bg-muted px-1 py-0.5 rounded text-[13px] font-mono" {...props}>{children}</code>
+                                                        );
+                                                    },
+                                                }}
+                                            >
                                                 {content}
                                             </ReactMarkdown>
                                         </div>

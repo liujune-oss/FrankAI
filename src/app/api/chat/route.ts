@@ -5,6 +5,21 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { appendLog } from './logger';
 import { getConfig } from '@/lib/config';
 
+// ─── Token budget helper ──────────────────────────────────────────────────────
+// Gemini tokenises roughly 1 token per 3-4 chars (English) / 2 chars (Chinese).
+// We use char counts as a lightweight proxy — no tokeniser required.
+
+const MEMORY_BUDGET = {
+    core: 800,       // user core memory
+    recallChunk: 300, // per recall chunk (×5 max → 1500)
+    archivalChunk: 300, // per archival chunk (×3 max → 900)
+} as const;
+
+function truncate(text: string, maxChars: number): string {
+    if (text.length <= maxChars) return text;
+    return text.slice(0, maxChars) + '…';
+}
+
 // ─── Local types ─────────────────────────────────────────────────────────────
 
 interface IncomingPart {
@@ -221,19 +236,19 @@ export async function POST(req: Request) {
                 const parts: string[] = [];
 
                 if (coreContent) {
-                    parts.push(`<core>\n${coreContent}\n</core>`);
+                    parts.push(`<core>\n${truncate(coreContent, MEMORY_BUDGET.core)}\n</core>`);
                 }
 
                 if (recallChunks.length > 0) {
                     const recallText = (recallChunks as MemoryChunk[])
-                        .map(c => `[${c.created_at?.slice(0, 10)}] ${c.summary_text}`)
+                        .map(c => `[${c.created_at?.slice(0, 10)}] ${truncate(c.summary_text, MEMORY_BUDGET.recallChunk)}`)
                         .join('\n');
                     parts.push(`<recent>\n${recallText}\n</recent>`);
                 }
 
                 if (archivalChunks && archivalChunks.length > 0) {
                     const archivalText = (archivalChunks as MemoryChunk[])
-                        .map(c => `[${c.created_at?.slice(0, 10) || ''}] ${c.summary_text}`)
+                        .map(c => `[${c.created_at?.slice(0, 10) || ''}] ${truncate(c.summary_text, MEMORY_BUDGET.archivalChunk)}`)
                         .join('\n');
                     parts.push(`<relevant>\n${archivalText}\n</relevant>`);
                 }
