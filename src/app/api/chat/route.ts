@@ -361,7 +361,7 @@ export async function POST(req: Request) {
                     // Phase 2: Isolated confirmation (only when tools were run)
                     // Uses a FRESH model with NO history — only user message + current tool results.
                     // This completely prevents the model from referencing previous turns.
-                    if (anyToolsExecuted && !anyTextStreamed) {
+                    if (anyToolsExecuted) {
                         send({ type: 'start-step' });
 
                         const resultSummary = allExecutedResults.map(r => {
