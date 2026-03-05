@@ -234,8 +234,8 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Debug Events Panel */}
-      {(chat.debugEvents.length > 0 || chat.isLoading) && (
+      {/* Debug Events Panel — 仅开发环境显示 */}
+      {process.env.NODE_ENV === 'development' && (chat.debugEvents.length > 0 || chat.isLoading) && (
         <div className="absolute bottom-24 right-3 z-50 w-72 max-h-64 overflow-y-auto rounded-xl shadow-2xl border border-zinc-700/60 bg-zinc-900/95 backdrop-blur-md text-xs font-mono">
           <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-700/50">
             <span className="text-zinc-400 font-semibold tracking-wide">⚡ 实时流事件</span>
