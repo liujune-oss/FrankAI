@@ -119,13 +119,13 @@ export default function MemoryManager({ open, onClose }: MemoryManagerProps) {
                                             </div>
                                         )}
                                         <div className="flex-1" />
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex items-center gap-1">
                                             {editingId !== memory.id && (
                                                 <>
                                                     <button onClick={() => handleEditClick(memory)} className="p-1.5 text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 rounded-md transition-colors" title="编辑记忆文本并重新向量化">
                                                         <Edit2 className="w-4 h-4" />
                                                     </button>
-                                                    <button onClick={() => handleDelete(memory.id)} className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors" title="删除当前记忆">
+                                                    <button onClick={() => handleDelete(memory.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-500/10 rounded-md transition-colors" title="删除当前记忆">
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 </>
