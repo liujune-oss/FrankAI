@@ -393,6 +393,32 @@ export async function POST(req: Request) {
                                 }
                             }
                         }
+
+                        // 兜底1：流为空时尝试 result.response
+                        if (!confirmHasText) {
+                            try {
+                                const finalResp = await confirmResult.response;
+                                const fallbackText = (finalResp?.candidates?.[0]?.content?.parts || [])
+                                    .filter((p: any) => p.text).map((p: any) => p.text).join('');
+                                if (fallbackText) {
+                                    send({ type: 'text-start', id: '0' });
+                                    send({ type: 'text-delta', id: '0', delta: fallbackText });
+                                    confirmHasText = true;
+                                }
+                            } catch (e) { appendLog('Phase 2 response fallback error: ' + e); }
+                        }
+
+                        // 兜底2：两层都空时发硬编码确认
+                        if (!confirmHasText) {
+                            const fallback = allExecutedResults.map(r => {
+                                try { const p = JSON.parse(r.result); return `"${p.title}" 已创建成功。`; }
+                                catch { return '操作已完成。'; }
+                            }).join(' ');
+                            send({ type: 'text-start', id: '0' });
+                            send({ type: 'text-delta', id: '0', delta: fallback });
+                            confirmHasText = true;
+                        }
+
                         if (confirmHasText) send({ type: 'text-end', id: '0' });
                         send({ type: 'finish-step', finishReason: 'stop' });
                     }
