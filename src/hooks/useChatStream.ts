@@ -35,6 +35,7 @@ export function useChatStream({
     const [debugEvents, setDebugEvents] = useState<string[]>([]);
 
     const lastSummarizedCount = useRef(0);
+    const chunkIndexRef = useRef(0);
     const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const triggerSummarize = useCallback(async (currentMessages: ChatMessage[]) => {
@@ -49,11 +50,13 @@ export function useChatStream({
                 headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({
                     session_id: conversationId,
-                    messages: messagesToSummarize
+                    chunk_index: chunkIndexRef.current,
+                    messages: messagesToSummarize,
                 })
             });
             if (res.ok) {
                 lastSummarizedCount.current = currentMessages.length;
+                chunkIndexRef.current += 1;
             }
         } catch (e) {
             console.error("Failed to sync memory", e);
@@ -63,6 +66,7 @@ export function useChatStream({
     // Reset when conversation changes
     useEffect(() => {
         lastSummarizedCount.current = 0;
+        chunkIndexRef.current = 0;
     }, [conversationId]);
 
     // Idle & Threshold watcher
@@ -71,9 +75,9 @@ export function useChatStream({
 
         if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
 
-        // 20 messages threshold (approx 10 turns)
+        // 10 messages threshold (1 chunk)
         const unsyncedCount = messages.length - lastSummarizedCount.current;
-        if (unsyncedCount >= 20) {
+        if (unsyncedCount >= 10) {
             triggerSummarize(messages);
             return;
         }
@@ -87,6 +91,29 @@ export function useChatStream({
             if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
         };
     }, [messages, isLoading, triggerSummarize]);
+
+    // 页面隐藏/关闭时兜底同步（Beacon API）
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== 'hidden') return;
+            if (!conversationId || messages.length <= lastSummarizedCount.current) return;
+            const messagesToSummarize = messages.slice(lastSummarizedCount.current);
+            if (messagesToSummarize.length === 0) return;
+            const headers = getAuthHeaders();
+            const payload = JSON.stringify({
+                session_id: conversationId,
+                chunk_index: chunkIndexRef.current,
+                messages: messagesToSummarize,
+            });
+            // Beacon API：页面关闭时仍能发出请求
+            navigator.sendBeacon(
+                '/api/memory/sync',
+                new Blob([payload], { type: 'application/json' })
+            );
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [conversationId, messages, getAuthHeaders]);
 
     const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;

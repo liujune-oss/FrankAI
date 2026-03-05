@@ -115,7 +115,7 @@ export async function POST(req: Request) {
 
         let finalSystemInstruction = systemInstruction || '';
 
-        // RAG Retrieval Flow
+        // ── 三层记忆 RAG ────────────────────────────────────────────
         const latestMessage = messages[messages.length - 1];
         let queryText = '';
         if (latestMessage && latestMessage.role === 'user') {
@@ -135,49 +135,70 @@ export async function POST(req: Request) {
             try {
                 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
                 const embeddingModelName = await getConfig<string>('memory_embedding_model') || 'gemini-embedding-001';
-                const embeddingModel = genAI.getGenerativeModel({ model: embeddingModelName });
-                const embedResult = await embeddingModel.embedContent(queryText);
+
+                // Layer 1 + Layer 2：并行查询（无需 embedding）
+                const [coreResult, recallResult, embedResult] = await Promise.all([
+                    // 热层：用户核心记忆
+                    supabaseAdmin
+                        .from('user_core_memory')
+                        .select('content')
+                        .eq('user_id', authPayload.uid)
+                        .single(),
+                    // 温层：最近 5 条摘要
+                    supabaseAdmin
+                        .from('memories_chunks')
+                        .select('id, summary_text, created_at')
+                        .eq('user_id', authPayload.uid)
+                        .order('created_at', { ascending: false })
+                        .limit(5),
+                    // 同时 embed 查询文本，供冷层使用
+                    genAI.getGenerativeModel({ model: embeddingModelName }).embedContent(queryText),
+                ]);
+
+                const coreContent = coreResult.data?.content || '';
+                const recallChunks = recallResult.data || [];
                 const embedding = embedResult.embedding.values;
 
-                const { data: matchedMemories, error } = await supabaseAdmin.rpc('match_tier1_memories', {
+                // Layer 3：冷层向量搜索（排除温层已有的 chunk）
+                const recallIds = recallChunks.map((c: any) => c.id);
+                const { data: archivalChunks } = await supabaseAdmin.rpc('match_archival_memories', {
                     query_embedding: embedding,
-                    match_threshold: 0.5,
+                    match_threshold: 0.6,
                     match_count: 3,
-                    p_user_id: authPayload.uid
+                    p_user_id: authPayload.uid,
+                    exclude_ids: recallIds,
                 });
 
-                if (!error && matchedMemories && matchedMemories.length > 0) {
-                    let memoryXml = '<retrieved_memories>\n  <!-- relevant memory chunks from 2-tier sliding window retrieval -->\n';
-                    for (const memory of matchedMemories) {
-                        try {
-                            const { data: startMsg } = await supabaseAdmin.from('chat_messages').select('created_at').eq('id', memory.start_message_id).single();
-                            const { data: endMsg } = await supabaseAdmin.from('chat_messages').select('created_at').eq('id', memory.end_message_id).single();
-                            if (startMsg && endMsg) {
-                                const { data: chunkMsgs } = await supabaseAdmin.from('chat_messages')
-                                    .select('role, content, created_at')
-                                    .eq('session_id', memory.session_id)
-                                    .gte('created_at', startMsg.created_at)
-                                    .lte('created_at', endMsg.created_at)
-                                    .order('created_at', { ascending: true });
-                                if (chunkMsgs && chunkMsgs.length > 0) {
-                                    memoryXml += `  <memory_chunk session_id="${memory.session_id}" timestamp="${chunkMsgs[0].created_at}">\n`;
-                                    memoryXml += `    <!-- Summary: ${memory.summary_text} -->\n`;
-                                    for (const msg of chunkMsgs) {
-                                        memoryXml += `    [${msg.role === 'user' ? 'User' : 'Assistant'}]: ${msg.content}\n`;
-                                    }
-                                    memoryXml += `  </memory_chunk>\n`;
-                                }
-                            }
-                        } catch (e) { }
-                    }
-                    memoryXml += '</retrieved_memories>\n\n';
+                // 组装注入
+                const parts: string[] = [];
+
+                if (coreContent) {
+                    parts.push(`<core>\n${coreContent}\n</core>`);
+                }
+
+                if (recallChunks.length > 0) {
+                    const recallText = recallChunks
+                        .map((c: any) => `[${c.created_at?.slice(0, 10)}] ${c.summary_text}`)
+                        .join('\n');
+                    parts.push(`<recent>\n${recallText}\n</recent>`);
+                }
+
+                if (archivalChunks && archivalChunks.length > 0) {
+                    const archivalText = archivalChunks
+                        .map((c: any) => `[${c.created_at?.slice(0, 10) || ''}] ${c.summary_text}`)
+                        .join('\n');
+                    parts.push(`<relevant>\n${archivalText}\n</relevant>`);
+                }
+
+                if (parts.length > 0) {
+                    const memoryXml = `<memory>\n${parts.join('\n')}\n</memory>`;
                     finalSystemInstruction = `<system_instructions>\n${finalSystemInstruction}\n</system_instructions>\n\n${memoryXml}`;
-                    appendLog('Appended 2-Tier memory to instruction.');
+                    appendLog(`Memory injected: core=${!!coreContent}, recall=${recallChunks.length}, archival=${archivalChunks?.length || 0}`);
                 } else {
-                    appendLog('Did not append. No 2-Tier matches found.');
+                    appendLog('No memory found for this user.');
                 }
             } catch (err) {
-                appendLog('2-Tier Catch Error: ' + err);
+                appendLog('Memory RAG error: ' + err);
             }
         }
 

@@ -4,7 +4,7 @@ import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getConfigs } from '@/lib/config';
 
-export const maxDuration = 120; // 2 minutes max depending on model speed
+export const maxDuration = 120;
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
 
@@ -21,92 +21,110 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const { messages, session_id } = await req.json();
+        const { messages, session_id, chunk_index = 0 } = await req.json();
 
         if (!session_id || !Array.isArray(messages) || messages.length === 0) {
             return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
         }
 
-        // 1. Prepare raw messages for Tier-2 extraction
+        // 1. 提取纯文本
         const messagesData = messages.map(m => {
-            let extractedText = '';
+            let text = '';
             if (m.parts && Array.isArray(m.parts)) {
-                extractedText = m.parts.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n');
+                text = m.parts.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n');
             } else if (typeof m.content === 'string') {
-                extractedText = m.content;
+                text = m.content;
             } else if (Array.isArray(m.content)) {
-                extractedText = m.content.find((p: any) => p.type === 'text')?.text || '';
+                text = m.content.find((p: any) => p.type === 'text')?.text || '';
             } else if (m.text) {
-                extractedText = m.text;
+                text = m.text;
             }
-            return {
-                user_id: authPayload.uid,
-                session_id: session_id,
-                role: m.role,
-                content: extractedText
-            };
+            return { user_id: authPayload.uid, session_id, role: m.role, content: text };
         });
 
-        // Delete existing tracked data for this session to allow overwriting with new context
-        await supabaseAdmin.from('memories_tier1').delete().eq('user_id', authPayload.uid).eq('session_id', session_id);
-        await supabaseAdmin.from('chat_messages').delete().eq('user_id', authPayload.uid).eq('session_id', session_id);
+        // 2. 写入原始消息日志（仅用于管理后台，不用于 RAG）
+        await supabaseAdmin.from('chat_messages').insert(messagesData);
 
-        // Insert messages into raw chat logs
-        const { data: insertedMessages, error: insertError } = await supabaseAdmin
-            .from('chat_messages')
-            .insert(messagesData)
-            .select('id');
-
-        if (insertError) {
-            console.error('Insert chat_messages error:', insertError);
-            throw insertError;
-        }
-
-        const start_message_id = insertedMessages?.[0]?.id || null;
-        const end_message_id = insertedMessages?.[insertedMessages.length - 1]?.id || null;
-
-        // 2. Generate Summary for the chunk
+        // 3. 生成摘要
         const configs = await getConfigs(['memory_summary_model', 'memory_embedding_model']);
-        const summaryModelName = configs.memory_summary_model || 'gemini-3-flash-preview';
+        const summaryModelName = configs.memory_summary_model || 'gemini-2.0-flash';
         const embeddingModelName = configs.memory_embedding_model || 'gemini-embedding-001';
 
-        const conversationText = messagesData.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
+        const conversationText = messagesData
+            .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+            .join('\n');
 
         const summaryModel = genAI.getGenerativeModel({ model: summaryModelName });
-        const prompt = `Analyze the following conversation chunk and extract the user's core preferences, facts, actions, and important context that would be useful for an AI to remember in future conversations. Provide a highly condensed paragraph summarizing these points. Do not include pleasantries. \n\nConversation Chunk:\n${conversationText}`;
+        const summaryResult = await summaryModel.generateContent(
+            `Analyze the following conversation and extract the user's core preferences, facts, actions, ` +
+            `and important context useful for an AI to remember in future conversations. ` +
+            `Provide a highly condensed paragraph. Do not include pleasantries.\n\n` +
+            `Conversation:\n${conversationText}`
+        );
+        const summaryText = summaryResult.response.text().trim();
 
-        const result = await summaryModel.generateContent(prompt);
-        const summaryText = result.response.text();
-
-        if (!summaryText.trim()) {
+        if (!summaryText) {
             throw new Error('Summary generation failed');
         }
 
-        // 3. Generate Vector Embedding dynamically based on the returned array
+        // 4. 生成 embedding
         const embeddingModel = genAI.getGenerativeModel({ model: embeddingModelName });
         const embedResult = await embeddingModel.embedContent(summaryText);
         const embedding = embedResult.embedding.values;
 
-        // 4. Store into Tier 1 Memory table
-        const { error: tier1Error } = await supabaseAdmin
-            .from('memories_tier1')
+        // 5. 追加写入 memories_chunks（不删除旧数据）
+        const { error: chunkError } = await supabaseAdmin
+            .from('memories_chunks')
             .insert([{
                 user_id: authPayload.uid,
-                session_id: session_id,
+                session_id,
+                chunk_index,
                 summary_text: summaryText,
-                embedding: embedding,
-                start_message_id: start_message_id,
-                end_message_id: end_message_id
+                embedding,
+                message_count: messages.length,
             }]);
 
-        if (tier1Error) {
-            console.error('Insert memories_tier1 error:', tier1Error);
-            throw tier1Error;
+        if (chunkError) {
+            console.error('Insert memories_chunks error:', chunkError);
+            throw chunkError;
         }
+
+        // 6. 异步更新 core memory（不阻塞响应）
+        updateCoreMemory(authPayload.uid, summaryText, summaryModelName).catch(e =>
+            console.error('Core memory update failed:', e)
+        );
 
         return NextResponse.json({ success: true, count: messages.length });
     } catch (error: any) {
         console.error('Sync memory error:', error);
         return NextResponse.json({ error: error.message || 'Sync failed' }, { status: 500 });
     }
+}
+
+async function updateCoreMemory(userId: string, newChunkSummary: string, modelName: string) {
+    if (!supabaseAdmin) return;
+
+    const { data: existing } = await supabaseAdmin
+        .from('user_core_memory')
+        .select('content')
+        .eq('user_id', userId)
+        .single();
+
+    const currentCore = existing?.content || '';
+
+    const model = genAI.getGenerativeModel({ model: modelName });
+    const result = await model.generateContent(
+        `已知用户核心记忆：\n${currentCore || '（暂无）'}\n\n` +
+        `本次新对话摘要：\n${newChunkSummary}\n\n` +
+        `判断：本次对话是否包含应该长期记住的新事实（如用户姓名、偏好、重要事件）？\n` +
+        `- 若有：返回更新后的完整核心记忆（保持简洁，不超过300字，中文）\n` +
+        `- 若无：仅返回 NO_UPDATE`
+    );
+
+    const response = result.response.text().trim();
+    if (response === 'NO_UPDATE') return;
+
+    await supabaseAdmin
+        .from('user_core_memory')
+        .upsert({ user_id: userId, content: response, updated_at: new Date().toISOString() });
 }
