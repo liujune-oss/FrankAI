@@ -1,16 +1,64 @@
-﻿// @ts-nocheck
-import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
+﻿import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
 import { checkChatRateLimit } from '@/lib/ratelimit';
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType, type Content, type Part, type FunctionCall, type FunctionDeclaration } from '@google/generative-ai';
 import { supabaseAdmin } from '@/lib/supabase';
 import { appendLog } from './logger';
 import { getConfig } from '@/lib/config';
+
+// ─── Local types ─────────────────────────────────────────────────────────────
+
+interface IncomingPart {
+    type?: string;
+    text?: string;
+    content?: string;
+    image?: string;
+    mimeType?: string;
+}
+
+interface IncomingMessage {
+    role: string;
+    content?: string | IncomingPart[];
+    parts?: IncomingPart[];
+    text?: string;
+}
+
+interface UpsertActivityArgs {
+    title?: string;
+    description?: string;
+    type?: string;
+    start_time?: string | null;
+    end_time?: string;
+    is_all_day?: boolean;
+    priority?: string;
+    location?: string;
+    id?: string;
+    tags?: string[];
+    status?: string;
+    // Normalisation aliases the model may send
+    activities?: UpsertActivityArgs[];
+    activity?: UpsertActivityArgs;
+    activity_type?: string;
+    summary?: string;
+    [key: string]: unknown;
+}
+
+interface MemoryChunk {
+    id: string;
+    summary_text: string;
+    created_at: string;
+}
+
+interface ToolExecutionResult {
+    toolName: string;
+    args: UpsertActivityArgs;
+    result: string;
+}
 
 // Allow streaming responses up to 120 seconds (Pro models think longer)
 export const maxDuration = 120;
 
 // 鈹€鈹€鈹€ Tool Declarations 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-const UPSERT_ACTIVITY_DECLARATION = {
+const UPSERT_ACTIVITY_DECLARATION = ({
     name: 'upsert_activity',
     description: 'Create or update a user activity. Use this tool when the user asks to schedule an event, set a reminder, or create a task/to-do item.',
     parameters: {
@@ -29,10 +77,10 @@ const UPSERT_ACTIVITY_DECLARATION = {
         },
         required: ['title'],
     },
-};
+}) as unknown as FunctionDeclaration;
 
 // 鈹€鈹€鈹€ Execute upsert_activity locally 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-async function executeUpsertActivity(args: any, userId: string): Promise<string> {
+async function executeUpsertActivity(args: UpsertActivityArgs, userId: string): Promise<string> {
     appendLog(`[upsert_activity] TOOL CALLED. args: ${JSON.stringify(args)}`);
     if (!supabaseAdmin) {
         appendLog(`[upsert_activity] ERROR: supabaseAdmin is null`);
@@ -46,7 +94,7 @@ async function executeUpsertActivity(args: any, userId: string): Promise<string>
             normalizedArgs = normalizedArgs.activity;
         }
 
-        const payload: any = { ...normalizedArgs, user_id: userId };
+        const payload: UpsertActivityArgs & { user_id: string } = { ...normalizedArgs, user_id: userId };
 
         if (payload.activity_type && !payload.type) { payload.type = payload.activity_type; }
         delete payload.activity_type;
@@ -120,12 +168,12 @@ export async function POST(req: Request) {
         let queryText = '';
         if (latestMessage && latestMessage.role === 'user') {
             if (latestMessage.parts && Array.isArray(latestMessage.parts)) {
-                queryText = latestMessage.parts.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n');
+                queryText = (latestMessage.parts as IncomingPart[]).filter(p => p.type === 'text').map(p => p.text ?? '').join('\n');
             } else if (typeof latestMessage.content === 'string') {
                 queryText = latestMessage.content;
             } else if (Array.isArray(latestMessage.content)) {
-                const textPart = latestMessage.content.find((p: any) => p.type === 'text');
-                if (textPart) queryText = textPart.text;
+                const textPart = (latestMessage.content as IncomingPart[]).find(p => p.type === 'text');
+                if (textPart) queryText = textPart.text ?? '';
             } else if (latestMessage.text) {
                 queryText = latestMessage.text;
             }
@@ -160,7 +208,7 @@ export async function POST(req: Request) {
                 const embedding = embedResult.embedding.values;
 
                 // Layer 3：冷层向量搜索（排除温层已有的 chunk）
-                const recallIds = recallChunks.map((c: any) => c.id);
+                const recallIds = (recallChunks as MemoryChunk[]).map(c => c.id);
                 const { data: archivalChunks } = await supabaseAdmin.rpc('match_archival_memories', {
                     query_embedding: embedding,
                     match_threshold: 0.6,
@@ -177,15 +225,15 @@ export async function POST(req: Request) {
                 }
 
                 if (recallChunks.length > 0) {
-                    const recallText = recallChunks
-                        .map((c: any) => `[${c.created_at?.slice(0, 10)}] ${c.summary_text}`)
+                    const recallText = (recallChunks as MemoryChunk[])
+                        .map(c => `[${c.created_at?.slice(0, 10)}] ${c.summary_text}`)
                         .join('\n');
                     parts.push(`<recent>\n${recallText}\n</recent>`);
                 }
 
                 if (archivalChunks && archivalChunks.length > 0) {
-                    const archivalText = archivalChunks
-                        .map((c: any) => `[${c.created_at?.slice(0, 10) || ''}] ${c.summary_text}`)
+                    const archivalText = (archivalChunks as MemoryChunk[])
+                        .map(c => `[${c.created_at?.slice(0, 10) || ''}] ${c.summary_text}`)
                         .join('\n');
                     parts.push(`<relevant>\n${archivalText}\n</relevant>`);
                 }
@@ -227,40 +275,41 @@ export async function POST(req: Request) {
         });
 
         // Build message history
-        const history: any[] = [];
-        for (const msg of messages.slice(0, -1)) {
+        const history: Content[] = [];
+        for (const msg of (messages as IncomingMessage[]).slice(0, -1)) {
             const role = msg.role === 'assistant' ? 'model' : 'user';
-            let parts: any[] = [];
+            let parts: Part[] = [];
             if (typeof msg.content === 'string') {
                 parts = [{ text: msg.content }];
             } else if (Array.isArray(msg.content)) {
-                parts = msg.content.map((p: any) => {
-                    if (p.type === 'text') return { text: p.text || p.content || '' };
-                    if (p.type === 'image') return { inlineData: { mimeType: p.mimeType || 'image/jpeg', data: p.image } };
-                    return { text: '' };
-                }).filter((p: any) => p.text !== '' || p.inlineData);
+                parts = (msg.content as IncomingPart[]).flatMap(p => {
+                    if (p.type === 'text') return [{ text: p.text || p.content || '' } as Part];
+                    if (p.type === 'image' && p.image) return [{ inlineData: { mimeType: p.mimeType || 'image/jpeg', data: p.image } } as Part];
+                    return [];
+                }).filter(p => ('text' in p && p.text !== '') || 'inlineData' in p);
             } else if (msg.parts) {
-                parts = msg.parts.map((p: any) => {
-                    if (p.type === 'text') return { text: p.text || '' };
-                    return { text: '' };
-                }).filter((p: any) => p.text !== '');
+                parts = (msg.parts as IncomingPart[])
+                    .map(p => ({ text: p.text || '' } as Part))
+                    .filter(p => 'text' in p && p.text !== '');
             }
             if (parts.length > 0) history.push({ role, parts });
         }
 
         // Last user message
-        const lastMsg = messages[messages.length - 1];
-        let lastParts: any[] = [];
+        const lastMsg = messages[messages.length - 1] as IncomingMessage;
+        let lastParts: Part[] = [];
         if (typeof lastMsg.content === 'string') {
             lastParts = [{ text: lastMsg.content }];
         } else if (Array.isArray(lastMsg.content)) {
-            lastParts = lastMsg.content.map((p: any) => {
-                if (p.type === 'text') return { text: p.text || p.content || '' };
-                if (p.type === 'image') return { inlineData: { mimeType: p.mimeType || 'image/jpeg', data: p.image } };
-                return null;
-            }).filter(Boolean);
+            lastParts = (lastMsg.content as IncomingPart[]).flatMap(p => {
+                if (p.type === 'text') return [{ text: p.text || p.content || '' } as Part];
+                if (p.type === 'image' && p.image) return [{ inlineData: { mimeType: p.mimeType || 'image/jpeg', data: p.image } } as Part];
+                return [];
+            });
         } else if (lastMsg.parts) {
-            lastParts = lastMsg.parts.map((p: any) => ({ text: p.text || '' })).filter((p: any) => p.text);
+            lastParts = (lastMsg.parts as IncomingPart[])
+                .map(p => ({ text: p.text || '' } as Part))
+                .filter(p => 'text' in p && (p as { text: string }).text);
         } else if (lastMsg.text) {
             lastParts = [{ text: lastMsg.text }];
         }
@@ -279,19 +328,19 @@ export async function POST(req: Request) {
                     const MAX_STEPS = 5;
 
                     // Collect all tool results across steps for isolated confirmation
-                    const allExecutedResults: { toolName: string; args: any; result: string }[] = [];
+                    const allExecutedResults: ToolExecutionResult[] = [];
                     let anyToolsExecuted = false;
                     let anyTextStreamed = false;
 
                     // Extract original user text for the isolated confirmation call
-                    const originalUserText = lastParts.filter((p: any) => p.text).map((p: any) => p.text).join('\n');
+                    const originalUserText = lastParts.filter(p => 'text' in p).map(p => (p as { text: string }).text).join('\n');
 
                     for (let step = 0; step < MAX_STEPS; step++) {
                         send({ type: 'start-step' });
 
                         const result = await chat.sendMessageStream(currentParts);
 
-                        let toolCalls: any[] = [];
+                        let toolCalls: FunctionCall[] = [];
                         let hasText = false;
 
                         for await (const chunk of result.stream) {
@@ -320,7 +369,8 @@ export async function POST(req: Request) {
                             try {
                                 const finalResp = await result.response;
                                 const finalText = (finalResp.candidates?.[0]?.content?.parts || [])
-                                    .filter((p: any) => p.text).map((p: any) => p.text).join('');
+                                    .filter((p): p is { text: string } => 'text' in p && typeof (p as { text?: string }).text === 'string')
+                                    .map(p => p.text).join('');
                                 if (finalText) {
                                     send({ type: 'text-start', id: '0' }); hasText = true;
                                     send({ type: 'text-delta', id: '0', delta: finalText });
@@ -340,16 +390,16 @@ export async function POST(req: Request) {
                         send({ type: 'finish-step', finishReason: 'tool-calls' });
 
                         // Execute tools
-                        const funcResponseParts: any[] = [];
+                        const funcResponseParts: Part[] = [];
                         for (const toolCall of toolCalls) {
                             let toolResult = 'Tool executed.';
                             if (toolCall.name === 'upsert_activity') {
-                                toolResult = await executeUpsertActivity(toolCall.args, authPayload.uid);
+                                toolResult = await executeUpsertActivity(toolCall.args as UpsertActivityArgs, authPayload.uid);
                             }
                             send({ type: 'tool-result', toolCallId: toolCall.name + '_' + step, toolName: toolCall.name, result: toolResult });
-                            allExecutedResults.push({ toolName: toolCall.name, args: toolCall.args, result: toolResult });
+                            allExecutedResults.push({ toolName: toolCall.name, args: toolCall.args as UpsertActivityArgs, result: toolResult });
 
-                            let parsedResult: any = null;
+                            let parsedResult: unknown = null;
                             try { parsedResult = JSON.parse(toolResult); } catch { }
                             funcResponseParts.push({
                                 functionResponse: {
@@ -407,7 +457,8 @@ export async function POST(req: Request) {
                             try {
                                 const finalResp = await confirmResult.response;
                                 const fallbackText = (finalResp?.candidates?.[0]?.content?.parts || [])
-                                    .filter((p: any) => p.text).map((p: any) => p.text).join('');
+                                    .filter((p): p is { text: string } => 'text' in p && typeof (p as { text?: string }).text === 'string')
+                                    .map(p => p.text).join('');
                                 if (fallbackText) {
                                     send({ type: 'text-start', id: '0' });
                                     send({ type: 'text-delta', id: '0', delta: fallbackText });
