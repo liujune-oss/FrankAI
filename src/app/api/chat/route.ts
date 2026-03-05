@@ -175,7 +175,6 @@ export async function POST(req: Request) {
         const { messages, systemInstruction } = await req.json();
         const url = new URL(req.url);
         const model = url.searchParams.get('model') || 'gemini-2.5-pro';
-
         let finalSystemInstruction = systemInstruction || '';
 
         // ── 三层记忆 RAG ────────────────────────────────────────────

@@ -3,6 +3,9 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { ChatMessage } from "@/types/chat";
 
+// 少于 3 轮（6 条消息）的对话不建立长期记忆
+const MIN_MESSAGES_FOR_MEMORY = 6;
+
 interface UseChatStreamOptions {
     conversationId?: string;
     messages: ChatMessage[];
@@ -40,6 +43,7 @@ export function useChatStream({
 
     const triggerSummarize = useCallback(async (currentMessages: ChatMessage[]) => {
         if (!conversationId || currentMessages.length <= lastSummarizedCount.current) return;
+        if (currentMessages.length < MIN_MESSAGES_FOR_MEMORY) return;
 
         const messagesToSummarize = currentMessages.slice(lastSummarizedCount.current);
         if (messagesToSummarize.length === 0) return;
@@ -97,6 +101,7 @@ export function useChatStream({
         const handleVisibilityChange = () => {
             if (document.visibilityState !== 'hidden') return;
             if (!conversationId || messages.length <= lastSummarizedCount.current) return;
+            if (messages.length < MIN_MESSAGES_FOR_MEMORY) return;
             const messagesToSummarize = messages.slice(lastSummarizedCount.current);
             if (messagesToSummarize.length === 0) return;
             const headers = getAuthHeaders();
