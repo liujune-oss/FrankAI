@@ -20,21 +20,18 @@
 
 ## 🟡 中优先级（影响体验）
 
-### B04 — IndexedDB 串行读取性能差
-**问题**：`getAllConversations()` 串行逐条读取，会话多时启动慢。
-**方案**：分离 metadata（标题、时间）和消息体，列表只加载 metadata。
+### B04 — IndexedDB 串行读取性能差 ✅ 已修复 v1.8.50
+改为 `Promise.all` 并行读取，`deleteAllConversations` 也同步并行化。
 
 ### B05 — 本地存储与云端记忆割裂
 **问题**：换设备后本地对话历史丢失，但 RAG 记忆还在，产生不一致体验。
 **方案**：评估是否将对话历史也同步到 Supabase（需权衡隐私与存储成本）。
 
-### B06 — 系统提示词拼接无结构
-**问题**：时间上下文、工具规则、用户指令、RAG 记忆四段字符串拼接，无长度保护，RAG 内容过长可能超出模型上下文限制。
-**方案**：提取 `buildSystemPrompt()` 函数，加 token 预算截断。
+### B06 — 系统提示词拼接无结构 ✅ 已修复 v1.8.49
+加入 `MEMORY_BUDGET` 常量和 `truncate()` 函数，core 800 字符、每条 recall/archival chunk 300 字符上限。
 
-### B07 — 代码块语法高亮缺失
-**问题**：react-markdown 渲染代码块无颜色高亮。
-**方案**：引入 `rehype-highlight` 或 `shiki`。
+### B07 — 代码块语法高亮缺失 ✅ 已修复 v1.8.49
+引入 `rehype-highlight` + `highlight.js`，主题 `atom-one-dark`，自定义 `pre`/`code` 组件区分行内与块级代码。
 
 ### B08 — 消息编辑/重新生成
 **问题**：不支持修改已发送消息或重新生成 AI 回复。
