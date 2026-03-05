@@ -206,11 +206,16 @@ export async function POST(req: Request) {
         const systemNow = new Date();
         const systemTimeStr = '[CRITICAL CONTEXT] Current UTC time: ' + systemNow.toISOString() + ' (Shanghai = UTC+8, so current local time is ' + new Date(systemNow.getTime() + 8 * 3600000).toISOString().replace('Z', '+08:00') + '). When the user says today/tomorrow/next week, calculate based on this timestamp.';
         finalSystemInstruction = systemTimeStr + '\n\n' + finalSystemInstruction;
-        finalSystemInstruction += '\n\n[Tool Usage Rules]\n' +
-            '1. ONLY call upsert_activity for activities explicitly requested in the CURRENT user message.\n' +
-            '2. NEVER call upsert_activity based on things mentioned in previous conversation turns — those have already been handled.\n' +
-            '3. After ALL tool calls in this turn complete, write ONE reply that summarizes ONLY what you just created in this turn.\n' +
-            '4. Do NOT mention anything from previous turns unless the user explicitly asks about it.';
+        // Inject current request text to prevent model from re-creating previous activities
+        const currentRequestText = queryText || '';
+        finalSystemInstruction += '\n\n[ANTI-DUPLICATE RULE — HIGHEST PRIORITY]\n' +
+            'The user\'s CURRENT request (the one you must respond to right now) is:\n' +
+            '"""\n' + currentRequestText + '\n"""\n\n' +
+            'ABSOLUTE RULES:\n' +
+            '- You may ONLY call upsert_activity for items explicitly mentioned in the CURRENT request above.\n' +
+            '- Every activity mentioned in EARLIER conversation turns is ALREADY SAVED TO THE DATABASE. Do NOT call upsert_activity for those items again.\n' +
+            '- Count carefully: the number of upsert_activity calls must equal the number of NEW items in the CURRENT request only.\n' +
+            '- After all tool calls complete, confirm ONLY what was created in this turn.';
         finalSystemInstruction += '\n\n[Time Zone] All timestamps MUST be in UTC (Z suffix). Shanghai is UTC+8, so 8 PM local = 12:00Z.';
 
         // Convert messages to Google AI format
