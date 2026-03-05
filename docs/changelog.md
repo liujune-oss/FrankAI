@@ -1,5 +1,59 @@
 # Gemini Chat — 发布记录
 
+## v1.8.42 — 2026-03-05
+- **修复：工具执行后必有回复（三层兜底）**
+  - Phase 2 确认模型增加三层保障：① 流式输出；② `confirmResult.response` fallback；③ 硬编码"xxx 已创建成功"
+  - 彻底消除工具执行成功但用户无任何回显的问题
+  - 新增 `scripts/test-chat-flow.mjs`，7 个本地测试场景覆盖所有边缘情况，无需网络即可运行
+
+## v1.8.41 — 2026-03-05
+- **修复：anyTextStreamed=true 导致 Phase 2 跳过**
+  - 模型在调用工具前若先输出文字，`anyTextStreamed` 被置为 true，Phase 2 的 `!anyTextStreamed` 条件触发跳过，步骤 2 文字又因 `anyToolsExecuted=true` 被丢弃，最终无回显
+  - 移除 `!anyTextStreamed` 条件，工具执行后始终触发 Phase 2
+
+## v1.8.40 — 2026-03-05
+- **修复：调试事件面板不应在生产环境显示**
+  - 实时流事件面板（SSE debug panel）改为 `process.env.NODE_ENV === 'development'` 条件渲染
+  - 生产环境用户不再看到 `▶️ [新步骤开始]` 等技术日志
+
+## v1.8.39 — 2026-03-05
+- **优化：记忆管理 UI 删除按钮可见性**
+  - 移除 `opacity-0 group-hover:opacity-100`，删除/编辑按钮始终可见
+  - 删除按钮颜色从灰色改为 `text-red-400`，移动端可直接点击
+
+## v1.8.38 — 2026-03-05
+- **重构：三层记忆架构 v2（参考 Letta/MemGPT 设计思路）**
+  - 新增 `user_core_memory` 表：用户长期事实，每次 sync 后异步 LLM 更新，常驻注入
+  - 新增 `memories_chunks` 表：替代 `memories_tier1`，支持分块追加（chunk_index），不再先删后写
+  - RAG 改为三层并行查询（热/温/冷），去掉原始消息回查，Token 消耗降低约 70%
+  - 同步阈值从 20 条降为 10 条，新增 `visibilitychange` + Beacon API 兜底防丢失
+  - 新增 `supabase/memory_v2_migration.sql` 迁移脚本
+  - 新增 `docs/memory-architecture-v2.md` 设计文档
+  - 解决 BACKLOG #B02（记忆同步破坏性写入）
+
+## v1.8.37 — 2026-03-05
+- **清理：移除废弃 AI SDK 依赖**
+  - 从 `package.json` 移除 `ai`（Vercel AI SDK）和 `@ai-sdk/google`
+  - 内联 `ChatMessage` 类型，不再依赖 SDK 类型导出
+  - 解决 BACKLOG #B15
+
+## v1.8.36 — 2026-03-04
+- **新增：API 请求限流**
+  - 聊天接口 10 次/分钟，图片生成 5 次/分钟（基于 Upstash Redis）
+  - `/api/memory/sync` 不限流
+  - Upstash 未配置时自动跳过，不影响本地开发
+  - 前端 429 响应显示友好中文提示
+  - 解决 BACKLOG #B01、#B09
+
+## v1.8.35 — 2026-03-04
+- **修复：工具调用后历史上下文混乱**
+  - Phase 2 确认使用全新隔离模型（无对话历史），彻底防止模型引用历史轮次
+
+## v1.8.34 — 2026-03-04
+- **重构：重写 chat route**
+  - 弃用 Vercel AI SDK，改用原生 `@google/generative-ai` SDK + 手写 SSE 流
+  - 修复工具调用死循环问题
+
 ## v1.8.27 — 2026-03-02
 - **修复：AI 驱动任务的空白回复问题**
   - 在升级到 Vercel AI SDK v6 后，原有的 `maxSteps: 5` 参数被弃用，导致含有工具调用的多轮对话（特别是 `gemini-3-flash-preview`）在工具执行后提前中断，产生空白回复。
