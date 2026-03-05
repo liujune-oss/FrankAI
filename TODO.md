@@ -2,7 +2,7 @@
 
 > 只放"现在要做的事"，完成后移入 BACKLOG.md 的已完成区。
 > 更多待办见 `BACKLOG.md`，版本规划见 `docs/roadmap.md`。
-> 当前版本：v1.8.51
+> 当前版本：v1.8.52
 
 ---
 
@@ -14,14 +14,14 @@
 
 ## 📋 下一步（按优先级）
 
-1. **B05** — 评估多设备对话历史同步（换设备后本地会话丢失）
-2. **B10** — 统一两套 Google AI SDK（@google/generative-ai + @google/genai）
-3. **B11** — 清理 Supabase 旧表 `memories_tier1` / `user_vectors`
+1. **B10** — 统一两套 Google AI SDK（@google/generative-ai + @google/genai）
+2. **B11** — 清理 Supabase 旧表 `memories_tier1` / `user_vectors`
 
 ---
 
 ## ✅ 最近完成
 
+- v1.8.52：对话历史云端同步（B05），换设备自动拉取历史（images 字段不同步）
 - v1.8.51：少于 3 轮（6 条消息）的对话不写入长期记忆，过滤浅层会话
 - v1.8.50：IndexedDB 并行读取，优化启动速度（B04 解决）
 - v1.8.49：代码块语法高亮 rehype-highlight + RAG token 预算截断（B06 B07 解决）

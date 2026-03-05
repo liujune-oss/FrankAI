@@ -23,9 +23,9 @@
 ### B04 — IndexedDB 串行读取性能差 ✅ 已修复 v1.8.50
 改为 `Promise.all` 并行读取，`deleteAllConversations` 也同步并行化。
 
-### B05 — 本地存储与云端记忆割裂
-**问题**：换设备后本地对话历史丢失，但 RAG 记忆还在，产生不一致体验。
-**方案**：评估是否将对话历史也同步到 Supabase（需权衡隐私与存储成本）。
+### B05 — 本地存储与云端记忆割裂 ✅ 已修复 v1.8.52
+新增 `conversations` Supabase 表 + `/api/conversations/sync` 端点。
+初始化时双向合并（updatedAt 新的覆盖旧的），saveMessages/delete/clearAll 后台同步，images 不上传云端。
 
 ### B06 — 系统提示词拼接无结构 ✅ 已修复 v1.8.49
 加入 `MEMORY_BUDGET` 常量和 `truncate()` 函数，core 800 字符、每条 recall/archival chunk 300 字符上限。
