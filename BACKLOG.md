@@ -13,9 +13,8 @@
 ### B02 — 记忆同步破坏性写入 ✅ 已修复 v1.8.38
 改为增量追加写入 `memories_chunks`，不再先删后写，原子性问题消失。
 
-### B03 — `@ts-nocheck` 覆盖核心路由
-**问题**：`/api/chat/route.ts`（400行核心逻辑）完全跳过 TypeScript 类型检查，历史上已多次因此产生参数幻觉 bug。
-**方案**：逐步补全类型，移除 `@ts-nocheck`。
+### B03 — `@ts-nocheck` 覆盖核心路由 ✅ 已修复 v1.8.48
+移除 `@ts-nocheck`，补全 `IncomingMessage`、`UpsertActivityArgs`、`MemoryChunk`、`ToolExecutionResult` 等类型，SDK 复杂 union 类型用 `as unknown as` 精确转换。
 
 ---
 
