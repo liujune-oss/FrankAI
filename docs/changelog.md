@@ -1,5 +1,31 @@
 # Gemini Chat — 发布记录
 
+## v1.8.52 — 2026-03-05
+- **功能：对话历史云端同步，多设备无缝恢复（B05）**
+  - 新增 Supabase `conversations` 表，存储 id/title/messages(JSONB)/created\_at/updated\_at
+  - 新增 `/api/conversations/sync` 端点（GET 拉取 / POST upsert / DELETE 单条或全部）
+  - `useConversations` 两阶段启动：Phase 1 立即显示本地 IndexedDB 数据，Phase 2 后台与云端双向合并
+  - 合并策略：`updatedAt` 较新的版本优先（last-write-wins）；本地独有 → 推送云端，云端较新 → 写入 IndexedDB
+  - `saveMessages`、`handleDeleteConversation`、`handleClearAll` 均后台同步云端，不阻塞 UI
+  - `images` 字段（base64）不同步云端，节省存储
+  - 新增集成测试 `scripts/test-conv-sync.mjs`（8 个场景全部通过）
+
+## v1.8.51 — 2026-03-05
+- **优化：少于 3 轮对话不写入长期记忆**
+  - 消息数 < 6 条（3 轮）的浅层会话跳过 memory sync，避免噪音写入
+
+## v1.8.50 — 2026-03-05
+- **性能：IndexedDB 并行读取，优化启动速度（B04）**
+  - `getAllConversations` 改为 `Promise.all` 并行读取，`deleteAllConversations` 同步并行化
+
+## v1.8.49 — 2026-03-05
+- **功能：代码块语法高亮 + RAG Token 预算截断（B06 B07）**
+  - 引入 `rehype-highlight` + `highlight.js`，主题 `atom-one-dark`
+  - 加入 `MEMORY_BUDGET` 常量和 `truncate()`，core 上限 800 字符、每条 recall/archival 上限 300 字符
+
+## v1.8.48 — 2026-03-05
+- **修复：移除 `@ts-nocheck`，补全 chat route 核心类型（B03）**
+
 ## v1.8.42 — 2026-03-05
 - **修复：工具执行后必有回复（三层兜底）**
   - Phase 2 确认模型增加三层保障：① 流式输出；② `confirmResult.response` fallback；③ 硬编码"xxx 已创建成功"
