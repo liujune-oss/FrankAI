@@ -22,12 +22,8 @@ export function generateId(): string {
 export async function getAllConversations(): Promise<Conversation[]> {
     const allKeys = await keys();
     const convKeys = (allKeys as string[]).filter((k) => k.startsWith(CONV_PREFIX));
-    const conversations: Conversation[] = [];
-    for (const key of convKeys) {
-        const conv = await get(key);
-        if (conv) conversations.push(conv);
-    }
-    return conversations.sort((a, b) => b.updatedAt - a.updatedAt);
+    const results = await Promise.all(convKeys.map((key) => get(key)));
+    return (results.filter(Boolean) as Conversation[]).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export async function getConversation(id: string): Promise<Conversation | null> {
@@ -50,10 +46,7 @@ export async function deleteConversation(id: string): Promise<void> {
 export async function deleteAllConversations(): Promise<void> {
     const allKeys = await keys();
     const convKeys = (allKeys as string[]).filter((k) => k.startsWith(CONV_PREFIX));
-    for (const key of convKeys) {
-        await del(key);
-    }
-    await del(ACTIVE_KEY);
+    await Promise.all([...convKeys.map((key) => del(key)), del(ACTIVE_KEY)]);
 }
 
 export function createNewConversation(): Conversation {
