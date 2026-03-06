@@ -1,6 +1,6 @@
 ﻿import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
 import { checkChatRateLimit } from '@/lib/ratelimit';
-import { GoogleGenerativeAI, SchemaType, type Content, type Part, type FunctionCall, type FunctionDeclaration } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { supabaseAdmin } from '@/lib/supabase';
 import { appendLog } from './logger';
 import { getConfig } from '@/lib/config';
@@ -73,26 +73,26 @@ interface ToolExecutionResult {
 export const maxDuration = 120;
 
 // 鈹€鈹€鈹€ Tool Declarations 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-const UPSERT_ACTIVITY_DECLARATION = ({
+const UPSERT_ACTIVITY_DECLARATION = {
     name: 'upsert_activity',
     description: 'Create or update a user activity. Use this tool when the user asks to schedule an event, set a reminder, or create a task/to-do item.',
     parameters: {
-        type: SchemaType.OBJECT,
+        type: 'object',
         properties: {
-            title: { type: SchemaType.STRING, description: 'A short, concise title for the activity.' },
-            description: { type: SchemaType.STRING, description: 'Detailed description or notes.' },
-            type: { type: SchemaType.STRING, description: 'Category: event, task, reminder, or log.' },
-            start_time: { type: SchemaType.STRING, description: 'ISO 8601 UTC start time (e.g. 2026-03-05T07:00:00Z for 3pm Shanghai).' },
-            end_time: { type: SchemaType.STRING, description: 'ISO 8601 UTC end time or deadline.' },
-            is_all_day: { type: SchemaType.BOOLEAN, description: 'True if the event lasts the entire day.' },
-            priority: { type: SchemaType.STRING, description: 'low, medium, high, or urgent. Default: medium.' },
-            location: { type: SchemaType.STRING, description: 'Physical location or virtual link.' },
-            id: { type: SchemaType.STRING, description: 'UUID of existing activity to update. Omit when creating new.' },
-            tags: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING }, description: 'Relevant semantic tags.' },
+            title: { type: 'string', description: 'A short, concise title for the activity.' },
+            description: { type: 'string', description: 'Detailed description or notes.' },
+            type: { type: 'string', description: 'Category: event, task, reminder, or log.' },
+            start_time: { type: 'string', description: 'ISO 8601 UTC start time (e.g. 2026-03-05T07:00:00Z for 3pm Shanghai).' },
+            end_time: { type: 'string', description: 'ISO 8601 UTC end time or deadline.' },
+            is_all_day: { type: 'boolean', description: 'True if the event lasts the entire day.' },
+            priority: { type: 'string', description: 'low, medium, high, or urgent. Default: medium.' },
+            location: { type: 'string', description: 'Physical location or virtual link.' },
+            id: { type: 'string', description: 'UUID of existing activity to update. Omit when creating new.' },
+            tags: { type: 'array', items: { type: 'string' }, description: 'Relevant semantic tags.' },
         },
         required: ['title'],
     },
-}) as unknown as FunctionDeclaration;
+};
 
 // 鈹€鈹€鈹€ Execute upsert_activity locally 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 async function executeUpsertActivity(args: UpsertActivityArgs, userId: string): Promise<string> {
@@ -195,7 +195,7 @@ export async function POST(req: Request) {
 
         if (queryText && supabaseAdmin) {
             try {
-                const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
+                const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || '' });
                 const embeddingModelName = await getConfig<string>('memory_embedding_model') || 'gemini-embedding-001';
 
                 // Layer 1 + Layer 2：并行查询（无需 embedding）
@@ -214,12 +214,12 @@ export async function POST(req: Request) {
                         .order('created_at', { ascending: false })
                         .limit(5),
                     // 同时 embed 查询文本，供冷层使用
-                    genAI.getGenerativeModel({ model: embeddingModelName }).embedContent(queryText),
+                    genai.models.embedContent({ model: embeddingModelName, contents: queryText }),
                 ]);
 
                 const coreContent = coreResult.data?.content || '';
                 const recallChunks = recallResult.data || [];
-                const embedding = embedResult.embedding.values;
+                const embedding = embedResult.embeddings?.[0]?.values ?? [];
 
                 // Layer 3：冷层向量搜索（排除温层已有的 chunk）
                 const recallIds = (recallChunks as MemoryChunk[]).map(c => c.id);
@@ -281,54 +281,47 @@ export async function POST(req: Request) {
         finalSystemInstruction += '\n\n[Time Zone] All timestamps MUST be in UTC (Z suffix). Shanghai is UTC+8, so 8 PM local = 12:00Z.';
 
         // Convert messages to Google AI format
-        const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
-        const geminiModel = genAI.getGenerativeModel({
-            model,
-            systemInstruction: finalSystemInstruction,
-            tools: [{ functionDeclarations: [UPSERT_ACTIVITY_DECLARATION] }],
-        });
+        const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || '' });
 
         // Build message history
-        const history: Content[] = [];
+        const history: any[] = [];
         for (const msg of (messages as IncomingMessage[]).slice(0, -1)) {
             const role = msg.role === 'assistant' ? 'model' : 'user';
-            let parts: Part[] = [];
+            let parts: any[] = [];
             if (typeof msg.content === 'string') {
                 parts = [{ text: msg.content }];
             } else if (Array.isArray(msg.content)) {
-                parts = (msg.content as IncomingPart[]).flatMap(p => {
-                    if (p.type === 'text') return [{ text: p.text || p.content || '' } as Part];
-                    if (p.type === 'image' && p.image) return [{ inlineData: { mimeType: p.mimeType || 'image/jpeg', data: p.image } } as Part];
+                parts = (msg.content as IncomingPart[]).flatMap<any>(p => {
+                    if (p.type === 'text') return [{ text: p.text || p.content || '' }];
+                    if (p.type === 'image' && p.image) return [{ inlineData: { mimeType: p.mimeType || 'image/jpeg', data: p.image } }];
                     return [];
-                }).filter(p => ('text' in p && p.text !== '') || 'inlineData' in p);
+                }).filter((p: any) => ('text' in p && p.text !== '') || 'inlineData' in p);
             } else if (msg.parts) {
                 parts = (msg.parts as IncomingPart[])
-                    .map(p => ({ text: p.text || '' } as Part))
-                    .filter(p => 'text' in p && p.text !== '');
+                    .map(p => ({ text: p.text || '' }))
+                    .filter(p => p.text !== '');
             }
             if (parts.length > 0) history.push({ role, parts });
         }
 
         // Last user message
         const lastMsg = messages[messages.length - 1] as IncomingMessage;
-        let lastParts: Part[] = [];
+        let lastParts: any[] = [];
         if (typeof lastMsg.content === 'string') {
             lastParts = [{ text: lastMsg.content }];
         } else if (Array.isArray(lastMsg.content)) {
-            lastParts = (lastMsg.content as IncomingPart[]).flatMap(p => {
-                if (p.type === 'text') return [{ text: p.text || p.content || '' } as Part];
-                if (p.type === 'image' && p.image) return [{ inlineData: { mimeType: p.mimeType || 'image/jpeg', data: p.image } } as Part];
+            lastParts = (lastMsg.content as IncomingPart[]).flatMap<any>(p => {
+                if (p.type === 'text') return [{ text: p.text || p.content || '' }];
+                if (p.type === 'image' && p.image) return [{ inlineData: { mimeType: p.mimeType || 'image/jpeg', data: p.image } }];
                 return [];
             });
         } else if (lastMsg.parts) {
             lastParts = (lastMsg.parts as IncomingPart[])
-                .map(p => ({ text: p.text || '' } as Part))
-                .filter(p => 'text' in p && (p as { text: string }).text);
+                .map(p => ({ text: p.text || '' }))
+                .filter(p => p.text);
         } else if (lastMsg.text) {
             lastParts = [{ text: lastMsg.text }];
         }
-
-        const chat = geminiModel.startChat({ history });
 
         // Build the SSE stream with tool-call loop
         const stream = new ReadableStream({
@@ -338,7 +331,6 @@ export async function POST(req: Request) {
 
                 try {
                     send({ type: 'start' });
-                    let currentParts = lastParts;
                     const MAX_STEPS = 5;
 
                     // Collect all tool results across steps for isolated confirmation
@@ -347,17 +339,27 @@ export async function POST(req: Request) {
                     let anyTextStreamed = false;
 
                     // Extract original user text for the isolated confirmation call
-                    const originalUserText = lastParts.filter(p => 'text' in p).map(p => (p as { text: string }).text).join('\n');
+                    const originalUserText = lastParts.filter((p: any) => 'text' in p).map((p: any) => p.text).join('\n');
+
+                    // Full contents array: history + current user message
+                    const allContents = [...history, { role: 'user', parts: lastParts }];
 
                     for (let step = 0; step < MAX_STEPS; step++) {
                         send({ type: 'start-step' });
 
-                        const result = await chat.sendMessageStream(currentParts);
+                        const result = genai.models.generateContentStream({
+                            model,
+                            contents: allContents,
+                            config: {
+                                systemInstruction: finalSystemInstruction,
+                                tools: [{ functionDeclarations: [UPSERT_ACTIVITY_DECLARATION] }] as any,
+                            },
+                        });
 
-                        let toolCalls: FunctionCall[] = [];
+                        let toolCalls: any[] = [];
                         let hasText = false;
 
-                        for await (const chunk of result.stream) {
+                        for await (const chunk of await result) {
                             const candidate = chunk.candidates?.[0];
                             if (!candidate) continue;
 
@@ -378,21 +380,6 @@ export async function POST(req: Request) {
                             }
                         }
 
-                        // result.response fallback: only for pure-text steps with no tools run yet
-                        if (!anyToolsExecuted && !hasText && toolCalls.length === 0) {
-                            try {
-                                const finalResp = await result.response;
-                                const finalText = (finalResp.candidates?.[0]?.content?.parts || [])
-                                    .filter((p): p is { text: string } => 'text' in p && typeof (p as { text?: string }).text === 'string')
-                                    .map(p => p.text).join('');
-                                if (finalText) {
-                                    send({ type: 'text-start', id: '0' }); hasText = true;
-                                    send({ type: 'text-delta', id: '0', delta: finalText });
-                                    anyTextStreamed = true;
-                                }
-                            } catch (e) { appendLog(`result.response fallback error: ${e}`); }
-                        }
-
                         if (hasText) send({ type: 'text-end', id: '0' });
 
                         if (toolCalls.length === 0) {
@@ -404,7 +391,7 @@ export async function POST(req: Request) {
                         send({ type: 'finish-step', finishReason: 'tool-calls' });
 
                         // Execute tools
-                        const funcResponseParts: Part[] = [];
+                        const funcResponseParts: any[] = [];
                         for (const toolCall of toolCalls) {
                             let toolResult = 'Tool executed.';
                             if (toolCall.name === 'upsert_activity') {
@@ -444,18 +431,17 @@ export async function POST(req: Request) {
                             } catch { return `- ${r.toolName} executed`; }
                         }).join('\n');
 
-                        const confirmModel = genAI.getGenerativeModel({
-                            model,
-                            systemInstruction: 'You are a helpful assistant. Write a short, friendly reply in the same language as the user. Be warm and personal. Do NOT add unnecessary lists or elaborate markdown unless the user asked for it.',
-                        });
-
                         const confirmPrompt = 'User request: "' + originalUserText + '"\n\nWhat was just done:\n' + resultSummary + '\n\nWrite a brief, friendly confirmation to the user (1-3 sentences max).';
-                        const confirmResult = await confirmModel.generateContentStream({
-                            contents: [{ role: 'user', parts: [{ text: confirmPrompt }] }]
+                        const confirmStream = genai.models.generateContentStream({
+                            model,
+                            contents: [{ role: 'user', parts: [{ text: confirmPrompt }] }],
+                            config: {
+                                systemInstruction: 'You are a helpful assistant. Write a short, friendly reply in the same language as the user. Be warm and personal. Do NOT add unnecessary lists or elaborate markdown unless the user asked for it.',
+                            },
                         });
 
                         let confirmHasText = false;
-                        for await (const chunk of confirmResult.stream) {
+                        for await (const chunk of await confirmStream) {
                             const candidate = chunk.candidates?.[0];
                             if (!candidate) continue;
                             for (const part of candidate.content?.parts || []) {
@@ -466,22 +452,7 @@ export async function POST(req: Request) {
                             }
                         }
 
-                        // 兜底1：流为空时尝试 result.response
-                        if (!confirmHasText) {
-                            try {
-                                const finalResp = await confirmResult.response;
-                                const fallbackText = (finalResp?.candidates?.[0]?.content?.parts || [])
-                                    .filter((p): p is { text: string } => 'text' in p && typeof (p as { text?: string }).text === 'string')
-                                    .map(p => p.text).join('');
-                                if (fallbackText) {
-                                    send({ type: 'text-start', id: '0' });
-                                    send({ type: 'text-delta', id: '0', delta: fallbackText });
-                                    confirmHasText = true;
-                                }
-                            } catch (e) { appendLog('Phase 2 response fallback error: ' + e); }
-                        }
-
-                        // 兜底2：两层都空时发硬编码确认
+                        // 兜底：流为空时发硬编码确认
                         if (!confirmHasText) {
                             const fallback = allExecutedResults.map(r => {
                                 try { const p = JSON.parse(r.result); return `"${p.title}" 已创建成功。`; }

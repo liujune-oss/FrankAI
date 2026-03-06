@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { getConfigs } from '@/lib/config';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
+const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || '' });
 
 export async function GET(req: NextRequest) {
     if (!supabaseAdmin) {
@@ -98,9 +98,11 @@ export async function PUT(req: NextRequest) {
         const configs = await getConfigs(['memory_embedding_model']);
         const embeddingModelName = configs.memory_embedding_model || 'gemini-embedding-001';
 
-        const embeddingModel = genAI.getGenerativeModel({ model: embeddingModelName });
-        const embedResult = await embeddingModel.embedContent(body.content);
-        const embedding = embedResult.embedding.values;
+        const embedResult = await genai.models.embedContent({
+            model: embeddingModelName,
+            contents: body.content,
+        });
+        const embedding = embedResult.embeddings?.[0]?.values ?? [];
 
         // Update the database record using the new schema
         const { data, error } = await supabaseAdmin

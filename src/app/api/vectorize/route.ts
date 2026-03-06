@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { appendLog } from '../chat/logger';
 import { getConfigs } from '@/lib/config';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
+const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || '' });
 
 export async function POST(req: NextRequest) {
     if (!supabaseAdmin) {
@@ -32,9 +32,6 @@ export async function POST(req: NextRequest) {
         const summaryModelName = configs.memory_summary_model || 'gemini-3-flash-preview';
         const embeddingModelName = configs.memory_embedding_model || 'gemini-embedding-001';
 
-        // 1. Generate Summary using configured model
-        const summaryModel = genAI.getGenerativeModel({ model: summaryModelName });
-
         // Format conversation for the prompt
         let conversationText = messages.map(m => {
             let extractedText = '';
@@ -52,18 +49,23 @@ export async function POST(req: NextRequest) {
 
         const prompt = `Analyze the following conversation and extract the user's core preferences, facts, and important context that would be useful for an AI to remember in future conversations. Provide a concise paragraph summarizing these points. \n\nConversation:\n${conversationText}`;
 
-        const result = await summaryModel.generateContent(prompt);
-        const summaryText = result.response.text();
+        const result = await genai.models.generateContent({
+            model: summaryModelName,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        });
+        const summaryText = result.text || '';
 
         if (!summaryText.trim()) {
             throw new Error('Summary generation failed');
         }
 
         // 2. Generate Vector Embedding using standard 768 dimensions
-        const embeddingModel = genAI.getGenerativeModel({ model: embeddingModelName });
-        const embedResult = await embeddingModel.embedContent(summaryText);
+        const embedResult = await genai.models.embedContent({
+            model: embeddingModelName,
+            contents: summaryText,
+        });
 
-        const embedding = embedResult.embedding.values;
+        const embedding = embedResult.embeddings?.[0]?.values ?? [];
 
         // 3. Store in Supabase pgvector
         const { error } = await supabaseAdmin

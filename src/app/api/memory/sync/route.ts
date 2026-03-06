@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { getConfigs } from '@/lib/config';
 
 export const maxDuration = 120;
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
+const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || '' });
 
 export async function POST(req: NextRequest) {
     if (!supabaseAdmin) {
@@ -54,23 +54,26 @@ export async function POST(req: NextRequest) {
             .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
             .join('\n');
 
-        const summaryModel = genAI.getGenerativeModel({ model: summaryModelName });
-        const summaryResult = await summaryModel.generateContent(
-            `Analyze the following conversation and extract the user's core preferences, facts, actions, ` +
+        const summaryPrompt = `Analyze the following conversation and extract the user's core preferences, facts, actions, ` +
             `and important context useful for an AI to remember in future conversations. ` +
             `Provide a highly condensed paragraph. Do not include pleasantries.\n\n` +
-            `Conversation:\n${conversationText}`
-        );
-        const summaryText = summaryResult.response.text().trim();
+            `Conversation:\n${conversationText}`;
+        const summaryResult = await genai.models.generateContent({
+            model: summaryModelName,
+            contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }],
+        });
+        const summaryText = (summaryResult.text || '').trim();
 
         if (!summaryText) {
             throw new Error('Summary generation failed');
         }
 
         // 4. 生成 embedding
-        const embeddingModel = genAI.getGenerativeModel({ model: embeddingModelName });
-        const embedResult = await embeddingModel.embedContent(summaryText);
-        const embedding = embedResult.embedding.values;
+        const embedResult = await genai.models.embedContent({
+            model: embeddingModelName,
+            contents: summaryText,
+        });
+        const embedding = embedResult.embeddings?.[0]?.values ?? [];
 
         // 5. 追加写入 memories_chunks（不删除旧数据）
         const { error: chunkError } = await supabaseAdmin
@@ -112,16 +115,17 @@ async function updateCoreMemory(userId: string, newChunkSummary: string, modelNa
 
     const currentCore = existing?.content || '';
 
-    const model = genAI.getGenerativeModel({ model: modelName });
-    const result = await model.generateContent(
-        `已知用户核心记忆：\n${currentCore || '（暂无）'}\n\n` +
+    const corePrompt = `已知用户核心记忆：\n${currentCore || '（暂无）'}\n\n` +
         `本次新对话摘要：\n${newChunkSummary}\n\n` +
         `判断：本次对话是否包含应该长期记住的新事实（如用户姓名、偏好、重要事件）？\n` +
         `- 若有：返回更新后的完整核心记忆（保持简洁，不超过300字，中文）\n` +
-        `- 若无：仅返回 NO_UPDATE`
-    );
+        `- 若无：仅返回 NO_UPDATE`;
+    const result = await genai.models.generateContent({
+        model: modelName,
+        contents: [{ role: 'user', parts: [{ text: corePrompt }] }],
+    });
 
-    const response = result.response.text().trim();
+    const response = (result.text || '').trim();
     if (response === 'NO_UPDATE') return;
 
     await supabaseAdmin
