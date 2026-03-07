@@ -23,9 +23,11 @@ export default function TasksPage() {
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<BlobPart[]>([]);
 
-    // STT mode: 'local' = Web Speech API, 'server' = Gemini STT
-    const [sttMode, setSttMode] = useState<'local' | 'server'>('local');
+    // STT mode: 'deepgram' = streaming WebSocket, 'local' = Web Speech API, 'server' = Gemini STT
+    const [sttMode, setSttMode] = useState<'deepgram' | 'local' | 'server'>('deepgram');
     const recognitionRef = useRef<any>(null);
+    const deepgramWsRef = useRef<WebSocket | null>(null);
+    const [liveTranscript, setLiveTranscript] = useState('');
 
     // Voice timing log overlay
     const [voiceLog, setVoiceLog] = useState<string | null>(null);
@@ -88,6 +90,111 @@ export default function TasksPage() {
 
     const handleNew = async () => {
         window.location.href = '/';
+    };
+
+    // ── Deepgram 流式 STT（边说边识别）─────────────────────────────────────────
+    const toggleDeepgramRecording = async () => {
+        if (isProcessingVoice) return;
+
+        // 停止录音
+        if (isRecording) {
+            deepgramWsRef.current?.send(JSON.stringify({ type: 'CloseStream' }));
+            setIsRecording(false);
+            return;
+        }
+
+        try {
+            // 获取临时 token
+            const tokenRes = await fetch('/api/speech-token', { headers: auth.getAuthHeaders() });
+            if (!tokenRes.ok) throw new Error('无法获取语音 token');
+            const { token: dgToken } = await tokenRes.json();
+
+            // 打开 Deepgram WebSocket
+            const ws = new WebSocket(
+                'wss://api.deepgram.com/v1/listen?language=zh-CN&model=nova-3&encoding=webm-opus&interim_results=true&endpointing=500',
+                ['token', dgToken]
+            );
+            deepgramWsRef.current = ws;
+
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+            mediaRecorderRef.current = mediaRecorder;
+
+            let finalTranscript = '';
+            const t0 = Date.now();
+            const logs: string[] = [];
+            const addLog = (msg: string) => { logs.push(msg); console.log(`[Deepgram] ${msg}`); };
+
+            ws.onopen = () => {
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) ws.send(e.data);
+                };
+                mediaRecorder.start(250); // 每 250ms 发一次音频块
+                setIsRecording(true);
+                setLiveTranscript('');
+            };
+
+            ws.onmessage = async (event) => {
+                const data = JSON.parse(event.data);
+                const alt = data.channel?.alternatives?.[0];
+                if (!alt?.transcript) return;
+
+                if (!data.is_final) {
+                    // 实时显示中间结果
+                    setLiveTranscript(alt.transcript);
+                } else if (alt.transcript.trim()) {
+                    finalTranscript = alt.transcript.trim();
+                    setLiveTranscript(finalTranscript);
+                    addLog(`Deepgram STT 完成: ${Date.now() - t0}ms\n识别结果: "${finalTranscript}"`);
+
+                    // 停止录音，关闭 WebSocket
+                    mediaRecorder.stop();
+                    stream.getTracks().forEach(t => t.stop());
+                    ws.send(JSON.stringify({ type: 'CloseStream' }));
+                    setIsRecording(false);
+                    setLiveTranscript('');
+                    setIsProcessingVoice(true);
+
+                    try {
+                        const t2 = Date.now();
+                        const intentRes = await fetch('/api/voice-intent', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', ...auth.getAuthHeaders() },
+                            body: JSON.stringify({ transcript: finalTranscript })
+                        });
+                        const intentData = await intentRes.json();
+                        addLog(`语音意图+工具调用完成: ${Date.now() - t2}ms`);
+                        if (!intentRes.ok || !intentData.success) throw new Error(intentData.error || '意图解析失败');
+                        const t3 = Date.now();
+                        await fetchActivities({ force: true });
+                        addLog(`列表刷新完成: ${Date.now() - t3}ms`);
+                        addLog(`全链路总计: ${Date.now() - t0}ms`);
+                        setVoiceLog(logs.join('\n'));
+                    } catch (err: any) {
+                        alert('语音处理失败：' + err.message);
+                    } finally {
+                        setIsProcessingVoice(false);
+                    }
+                }
+            };
+
+            ws.onerror = () => {
+                setIsRecording(false);
+                setLiveTranscript('');
+                mediaRecorder.stop();
+                stream.getTracks().forEach(t => t.stop());
+                alert('Deepgram 连接失败，请切换为云端模式');
+            };
+
+            ws.onclose = () => {
+                if (isRecording) setIsRecording(false);
+                setLiveTranscript('');
+            };
+
+        } catch (err: any) {
+            setIsRecording(false);
+            alert('启动失败：' + err.message);
+        }
     };
 
     // ── 本地 STT（Web Speech API）──────────────────────────────────────────────
@@ -355,10 +462,19 @@ export default function TasksPage() {
                 )}
             </div>
 
+            {/* Live transcript bubble */}
+            {liveTranscript && (
+                <div className="absolute bottom-[calc(8rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 w-[80%] max-w-xs">
+                    <div className="bg-zinc-800/90 backdrop-blur-sm text-zinc-100 text-sm px-4 py-2 rounded-2xl text-center shadow-lg">
+                        {liveTranscript}
+                    </div>
+                </div>
+            )}
+
             {/* FAB */}
             <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
                 <button
-                    onClick={sttMode === 'local' ? toggleLocalRecording : toggleRecording}
+                    onClick={sttMode === 'deepgram' ? toggleDeepgramRecording : sttMode === 'local' ? toggleLocalRecording : toggleRecording}
                     disabled={isProcessingVoice}
                     className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${isRecording ? 'bg-red-500 scale-110 animate-pulse' : 'bg-zinc-50 hover:scale-105 active:scale-95'} ${isProcessingVoice ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
@@ -369,10 +485,10 @@ export default function TasksPage() {
                     )}
                 </button>
                 <button
-                    onClick={() => setSttMode(m => m === 'local' ? 'server' : 'local')}
+                    onClick={() => setSttMode(m => m === 'deepgram' ? 'local' : m === 'local' ? 'server' : 'deepgram')}
                     className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
                 >
-                    {sttMode === 'local' ? '本地' : '云端'}
+                    {sttMode === 'deepgram' ? '流式' : sttMode === 'local' ? '本地' : '云端'}
                 </button>
             </div>
 
