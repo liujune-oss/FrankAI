@@ -78,6 +78,7 @@ export default function AdminDashboard() {
     const [apiModels, setApiModels] = useState<ApiModel[]>([]);
     const [showApiModels, setShowApiModels] = useState(false);
     const [fetchingModels, setFetchingModels] = useState(false);
+    const [apiModelFilter, setApiModelFilter] = useState('');
 
     // Admin Memories states
     const [adminMemories, setAdminMemories] = useState<any[]>([]);
@@ -574,8 +575,19 @@ export default function AdminDashboard() {
                                             </h3>
                                             <button onClick={() => setShowApiModels(false)} className="text-xs text-gray-500 hover:text-gray-700">收起</button>
                                         </div>
+                                        <input
+                                            type="text"
+                                            placeholder="过滤模型..."
+                                            value={apiModelFilter}
+                                            onChange={e => setApiModelFilter(e.target.value)}
+                                            className="w-full mb-3 px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-purple-500"
+                                        />
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
-                                            {apiModels.map(m => {
+                                            {apiModels.filter(m =>
+                                                !apiModelFilter ||
+                                                m.id.toLowerCase().includes(apiModelFilter.toLowerCase()) ||
+                                                (m.displayName || '').toLowerCase().includes(apiModelFilter.toLowerCase())
+                                            ).map(m => {
                                                 const alreadyAdded = chatModels.some(cm => cm.id === m.id);
                                                 return (
                                                     <div key={m.id} className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs">
