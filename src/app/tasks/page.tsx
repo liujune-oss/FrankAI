@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import ConversationDrawer from "@/components/ConversationDrawer";
 import { getAllConversations, getActiveConversationId, setActiveConversationId, Conversation } from "@/lib/conversations";
-import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, Trash2, FileText, Loader2 } from "lucide-react";
+import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, Trash2, FileText, Loader2, Copy, X as XIcon } from "lucide-react";
 import { useActivities, Activity } from "@/hooks/useActivities";
 
 export default function TasksPage() {
@@ -22,6 +22,10 @@ export default function TasksPage() {
     const [voiceIntentModel, setVoiceIntentModel] = useState('gemini-3.1-flash-lite-preview');
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<BlobPart[]>([]);
+
+    // Voice timing log overlay
+    const [voiceLog, setVoiceLog] = useState<string | null>(null);
+    const [logCopied, setLogCopied] = useState(false);
 
     // Custom Delete Dialog State
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -108,6 +112,10 @@ export default function TasksPage() {
                 stream.getTracks().forEach(track => track.stop());
 
                 setIsProcessingVoice(true);
+                const t0 = Date.now();
+                const logs: string[] = [];
+                const addLog = (msg: string) => { logs.push(msg); console.log(`[Voice] ${msg}`); };
+                addLog(`音频大小: ${(audioBlob.size / 1024).toFixed(1)}KB`);
                 try {
                     // 1. Send to Speech-to-Text
                     const formData = new FormData();
@@ -124,9 +132,11 @@ export default function TasksPage() {
 
                     if (!sttRes.ok) throw new Error('STT request failed');
                     const { transcript } = await sttRes.json();
+                    addLog(`STT 完成: ${Date.now() - t0}ms\n识别结果: "${transcript}"`);
 
                     if (transcript && transcript.trim() !== '') {
                         // 2. Send transcript to Chat AI as a background command
+                        const t2 = Date.now();
                         const chatRes = await fetch(`/api/chat?model=${voiceIntentModel}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', ...auth.getAuthHeaders() },
@@ -136,7 +146,7 @@ export default function TasksPage() {
                             })
                         });
 
-                        // We drain the stream but don't strictly need to show it, 
+                        // We drain the stream but don't strictly need to show it,
                         // as upsert_activity triggers the global 'chat_response_completed' event.
                         if (chatRes.ok && chatRes.body) {
                             const reader = chatRes.body.getReader();
@@ -144,9 +154,14 @@ export default function TasksPage() {
                                 const { done } = await reader.read();
                                 if (done) break;
                             }
+                            addLog(`Chat+工具调用完成: ${Date.now() - t2}ms`);
                         }
                         // Refresh the UI explicitly just in case Event Listener misses
+                        const t3 = Date.now();
                         await fetchActivities({ force: true });
+                        addLog(`列表刷新完成: ${Date.now() - t3}ms`);
+                        addLog(`全链路总计: ${Date.now() - t0}ms`);
+                        setVoiceLog(logs.join('\n'));
                     }
                 } catch (err) {
                     console.error("Voice processing error:", err);
@@ -314,6 +329,30 @@ export default function TasksPage() {
                                 确认删除
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Voice Timing Log Overlay */}
+            {voiceLog && (
+                <div className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-4 duration-200">
+                        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                            <span className="text-sm font-semibold text-zinc-200">语音延迟日志</span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => { navigator.clipboard.writeText(voiceLog); setLogCopied(true); setTimeout(() => setLogCopied(false), 2000); }}
+                                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors px-2 py-1 rounded-md hover:bg-white/5"
+                                >
+                                    <Copy size={13} />
+                                    {logCopied ? '已复制' : '复制'}
+                                </button>
+                                <button onClick={() => setVoiceLog(null)} className="p-1 text-zinc-500 hover:text-zinc-200 transition-colors">
+                                    <XIcon size={16} />
+                                </button>
+                            </div>
+                        </div>
+                        <pre className="px-4 pb-4 text-xs text-zinc-300 font-mono whitespace-pre-wrap leading-relaxed">{voiceLog}</pre>
                     </div>
                 </div>
             )}
