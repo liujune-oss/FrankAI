@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
         }
 
         const { data, error } = await supabaseAdmin
-            .from('memories_tier1')
+            .from('memories_chunks')
             .select('id, summary_text, created_at, session_id')
             .eq('user_id', authPayload.uid)
             .order('created_at', { ascending: false });
@@ -52,7 +52,7 @@ export async function DELETE(req: NextRequest) {
         if (body.clearAll) {
             // Delete all memories for this user
             const { error } = await supabaseAdmin
-                .from('memories_tier1')
+                .from('memories_chunks')
                 .delete()
                 .eq('user_id', authPayload.uid);
             if (error) throw error;
@@ -60,7 +60,7 @@ export async function DELETE(req: NextRequest) {
         } else if (body.id) {
             // Delete specific memory
             const { error } = await supabaseAdmin
-                .from('memories_tier1')
+                .from('memories_chunks')
                 .delete()
                 .eq('user_id', authPayload.uid)
                 .eq('id', body.id);
@@ -106,7 +106,7 @@ export async function PUT(req: NextRequest) {
 
         // Update the database record using the new schema
         const { data, error } = await supabaseAdmin
-            .from('memories_tier1')
+            .from('memories_chunks')
             .update({
                 summary_text: body.content,
                 embedding: embedding

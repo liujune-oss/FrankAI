@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
         // Fetch memories WITHOUT implicit user info join since FK was removed
         const { data: memoriesData, error: memoriesError } = await supabaseAdmin
-            .from('memories_tier1')
+            .from('memories_chunks')
             .select('*')
             .order('created_at', { ascending: false });
 
@@ -47,8 +47,8 @@ export async function GET(req: NextRequest) {
             session_id: row.session_id,
             username: userMap[row.user_id] || 'Unknown',
             summary_text: row.summary_text,
-            start_message_id: row.start_message_id,
-            end_message_id: row.end_message_id,
+            chunk_index: row.chunk_index,
+            message_count: row.message_count,
             created_at: row.created_at
         }));
 
@@ -77,7 +77,7 @@ export async function DELETE(req: NextRequest) {
         if (body.clear_user_id) {
             // Clear all memories for a specific user
             const { error } = await supabaseAdmin
-                .from('memories_tier1')
+                .from('memories_chunks')
                 .delete()
                 .eq('user_id', body.clear_user_id);
             if (error) throw error;
@@ -86,7 +86,7 @@ export async function DELETE(req: NextRequest) {
         } else if (body.id) {
             // Delete specific memory
             const { error } = await supabaseAdmin
-                .from('memories_tier1')
+                .from('memories_chunks')
                 .delete()
                 .eq('id', body.id);
             if (error) throw error;

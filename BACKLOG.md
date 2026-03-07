@@ -46,8 +46,9 @@
 ### B10 — 两套 Google AI SDK 并存 ✅ 已修复 v1.8.53
 全部迁移至 `@google/genai` v1.42.0，移除旧 `@google/generative-ai`。API 差异：`generateContent`/`embedContent` 通过 `genai.models.*` 调用，streaming 直接迭代 AsyncGenerator，`response.text` 为属性非方法，embeddings 取 `embeddings[0].values`。
 
-### B11 — 旧记忆表残留
-`memories_tier1` 和 `user_vectors` 旧表仍在 Supabase，已被 `memories_chunks` 替代，可清理。
+### B11 — 旧记忆表残留 ✅ 已修复 v1.8.56
+代码层迁移完成：`/api/memories`、`/api/admin/memories` 均已改用 `memories_chunks`，`/api/vectorize` 死路由已删除。
+待在 Supabase 执行：`DROP TABLE IF EXISTS memories_tier1; DROP TABLE IF EXISTS user_vectors;`
 
 ### B12 — 设备指纹防伪造能力弱
 当前指纹在客户端计算，可伪造。安全性实际只依赖 JWT，指纹是虚假的第二因子。
