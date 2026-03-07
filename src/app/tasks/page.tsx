@@ -135,26 +135,18 @@ export default function TasksPage() {
                     addLog(`STT 完成: ${Date.now() - t0}ms\n识别结果: "${transcript}"`);
 
                     if (transcript && transcript.trim() !== '') {
-                        // 2. Send transcript to Chat AI as a background command
+                        // 2. 调用轻量语音意图端点（无 RAG / 无 Phase 2）
                         const t2 = Date.now();
-                        const chatRes = await fetch(`/api/chat?model=${voiceIntentModel}`, {
+                        const intentRes = await fetch('/api/voice-intent', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', ...auth.getAuthHeaders() },
-                            body: JSON.stringify({
-                                messages: [{ role: 'user', content: transcript }],
-                                systemInstruction: "You are the Gemini Chat assistant. The user just spoke a command via the Voice feature on the Tasks page. ALWAYS extract their intent and call the nearest tool like `upsert_activity` to fulfill it. Be totally silent otherwise, no conversational filler needed."
-                            })
+                            body: JSON.stringify({ transcript })
                         });
 
-                        // We drain the stream but don't strictly need to show it,
-                        // as upsert_activity triggers the global 'chat_response_completed' event.
-                        if (chatRes.ok && chatRes.body) {
-                            const reader = chatRes.body.getReader();
-                            while (true) {
-                                const { done } = await reader.read();
-                                if (done) break;
-                            }
-                            addLog(`Chat+工具调用完成: ${Date.now() - t2}ms`);
+                        const intentData = await intentRes.json();
+                        addLog(`语音意图+工具调用完成: ${Date.now() - t2}ms`);
+                        if (!intentRes.ok || !intentData.success) {
+                            throw new Error(intentData.error || '意图解析失败');
                         }
                         // Refresh the UI explicitly just in case Event Listener misses
                         const t3 = Date.now();

@@ -142,36 +142,26 @@ async function main() {
   };
   ok(`用户 ID: ${userId.slice(0, 8)}...`);
 
-  // Step 2: 调用 /api/chat（意图模型 + 工具调用）
-  step('Step 2 — 模型推理 + 工具调用');
+  // Step 2: 调用 /api/voice-intent（轻量端点）
+  step('Step 2 — /api/voice-intent（模型推理 + 工具落库）');
   const t2Start = Date.now();
 
-  const chatRes = await fetch(`${BASE}/api/chat?model=gemini-3.1-flash-lite-preview`, {
+  const intentRes = await fetch(`${BASE}/api/voice-intent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders },
-    body: JSON.stringify({
-      messages: [{ role: 'user', content: TRANSCRIPT }],
-      systemInstruction: "You are the Gemini Chat assistant. The user just spoke a command via the Voice feature on the Tasks page. ALWAYS extract their intent and call the nearest tool like `upsert_activity` to fulfill it. Be totally silent otherwise, no conversational filler needed."
-    }),
+    body: JSON.stringify({ transcript: TRANSCRIPT }),
   });
 
-  if (!chatRes.ok) {
-    const text = await chatRes.text();
-    throw new Error(`/api/chat 返回 ${chatRes.status}: ${text}`);
-  }
-
-  info(`收到响应头，开始消费 SSE 流...`);
-  const timeline = await consumeChatSSE(chatRes);
-
+  const intentData = await intentRes.json();
   const t2Total = Date.now() - t2Start;
 
-  log('');
-  log(`  ${c.bold}模型推理耗时（到首 token）:${c.reset}  ${dur(timeline.first_token ?? timeline.tool_call ?? '?')}`);
-  log(`  ${c.bold}工具调用决策耗时:${c.reset}            ${dur(timeline.tool_call ?? '?')}`);
-  if (timeline.tool_result) {
-    log(`  ${c.bold}工具落库耗时（DB写入）:${c.reset}      ${dur(timeline.tool_result - (timeline.tool_call ?? 0))}`);
+  if (!intentRes.ok || !intentData.success) {
+    throw new Error(`/api/voice-intent 失败 ${intentRes.status}: ${JSON.stringify(intentData)}`);
   }
-  log(`  ${c.bold}流结束总耗时:${c.reset}                ${dur(timeline.total_stream)}`);
+
+  log('');
+  log(`  ${c.bold}模型推理 + 工具落库合计:${c.reset}  ${dur(t2Total)}`);
+  info(`  创建结果: ${JSON.stringify(intentData.activity)}`);
 
   // Step 3: 查询 activities 验证落库
   step('Step 3 — 前端刷新 /api/activities');
@@ -199,14 +189,9 @@ async function main() {
 
   // 汇总
   log(`\n${c.bold}=== 延迟汇总 ===${c.reset}`);
-  log(`  模型首响应（TTFT）:  ${dur(timeline.first_token ?? timeline.tool_call ?? '?')}`);
-  log(`  工具调用决策:        ${dur(timeline.tool_call ?? '?')}`);
-  if (timeline.tool_result && timeline.tool_call) {
-    log(`  DB 写入（落库）:     ${dur(timeline.tool_result - timeline.tool_call)}`);
-  }
-  log(`  SSE 流完成:          ${dur(timeline.total_stream)}`);
+  log(`  模型推理+工具落库:   ${dur(t2Total)}`);
   log(`  前端数据刷新:        ${dur(t3Total)}`);
-  log(`  ${c.bold}全链路总计:          ${dur(timeline.total_stream + t3Total)}${c.reset}`);
+  log(`  ${c.bold}全链路总计:          ${dur(t2Total + t3Total)}${c.reset}`);
 }
 
 main().catch(e => {
