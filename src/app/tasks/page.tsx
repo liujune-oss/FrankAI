@@ -109,9 +109,9 @@ export default function TasksPage() {
             if (!tokenRes.ok) throw new Error('无法获取语音 token');
             const { token: dgToken } = await tokenRes.json();
 
-            // 打开 Deepgram WebSocket
+            // 打开 Deepgram WebSocket（nova-2 支持中文，不指定 encoding 让 Deepgram 自动检测 webm/opus）
             const ws = new WebSocket(
-                'wss://api.deepgram.com/v1/listen?language=zh-CN&model=nova-3&encoding=webm-opus&interim_results=true&endpointing=500',
+                'wss://api.deepgram.com/v1/listen?language=zh-CN&model=nova-2&interim_results=true&endpointing=500',
                 ['token', dgToken]
             );
             deepgramWsRef.current = ws;
