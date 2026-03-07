@@ -39,8 +39,8 @@ export async function POST(req: NextRequest) {
         const localTime = new Date(now.getTime() + 8 * 3600000).toISOString().replace('Z', '+08:00');
         const systemInstruction =
             `Current UTC time: ${now.toISOString()} (Shanghai local: ${localTime}). ` +
-            `Transcribe the audio, then extract the user's intent and call upsert_activity. ` +
-            `Reply only with the tool call. No extra text.`;
+            `First, accurately transcribe every word in the audio as-is (output the full transcript text). ` +
+            `Then, based on the transcript, call upsert_activity to create the task/event/log.`;
 
         const stream = genai.models.generateContentStream({
             model,
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
                 role: 'user',
                 parts: [
                     { inlineData: { data: base64Data, mimeType } },
-                    { text: '请转写音频内容，并调用 upsert_activity 工具创建对应的任务/日程/随手记。' }
+                    { text: '请逐字转写音频，然后根据内容调用 upsert_activity 创建对应记录。' }
                 ]
             }],
             config: {
