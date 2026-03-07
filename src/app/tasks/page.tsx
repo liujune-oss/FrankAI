@@ -118,7 +118,7 @@ export default function TasksPage() {
 
                     if (transcript && transcript.trim() !== '') {
                         // 2. Send transcript to Chat AI as a background command
-                        const chatRes = await fetch('/api/chat?model=gemini-2.5-pro', {
+                        const chatRes = await fetch('/api/chat?model=gemini-2.0-flash', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', ...auth.getAuthHeaders() },
                             body: JSON.stringify({
