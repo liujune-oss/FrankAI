@@ -155,7 +155,7 @@ async function main() {
   const supabase = createClient(supabaseUrl, supabaseKey);
   const now      = new Date();
   const nowISO   = now.toISOString();
-  const MODEL    = 'gemini-2.0-flash';
+  const MODEL    = 'gemini-2.5-flash';
 
   info(`测试时间: ${nowISO}`);
   info(`测试用户: ${testUserId}`);

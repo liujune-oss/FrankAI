@@ -43,8 +43,8 @@
 
 ## 🟢 低优先级（锦上添花）
 
-### B10 — 两套 Google AI SDK 并存
-`@google/generative-ai`（对话）和 `@google/genai`（图片）功能重叠，维护两套初始化。长期考虑统一到新版 `@google/genai`。
+### B10 — 两套 Google AI SDK 并存 ✅ 已修复 v1.8.53
+全部迁移至 `@google/genai` v1.42.0，移除旧 `@google/generative-ai`。API 差异：`generateContent`/`embedContent` 通过 `genai.models.*` 调用，streaming 直接迭代 AsyncGenerator，`response.text` 为属性非方法，embeddings 取 `embeddings[0].values`。
 
 ### B11 — 旧记忆表残留
 `memories_tier1` 和 `user_vectors` 旧表仍在 Supabase，已被 `memories_chunks` 替代，可清理。

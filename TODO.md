@@ -14,13 +14,13 @@
 
 ## 📋 下一步（按优先级）
 
-1. **B10** — 统一两套 Google AI SDK（@google/generative-ai + @google/genai）
-2. **B11** — 清理 Supabase 旧表 `memories_tier1` / `user_vectors`
+1. **B11** — 清理 Supabase 旧表 `memories_tier1` / `user_vectors`
 
 ---
 
 ## ✅ 最近完成
 
+- v1.8.53：统一 Google AI SDK，移除旧 @google/generative-ai，全部迁移至 @google/genai（B10）
 - v1.8.52：对话历史云端同步（B05），换设备自动拉取历史（images 字段不同步）
 - v1.8.51：少于 3 轮（6 条消息）的对话不写入长期记忆，过滤浅层会话
 - v1.8.50：IndexedDB 并行读取，优化启动速度（B04 解决）
