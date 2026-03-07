@@ -23,6 +23,10 @@ export default function TasksPage() {
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<BlobPart[]>([]);
 
+    // STT mode: 'local' = Web Speech API, 'server' = Gemini STT
+    const [sttMode, setSttMode] = useState<'local' | 'server'>('local');
+    const recognitionRef = useRef<any>(null);
+
     // Voice timing log overlay
     const [voiceLog, setVoiceLog] = useState<string | null>(null);
     const [logCopied, setLogCopied] = useState(false);
@@ -84,6 +88,71 @@ export default function TasksPage() {
 
     const handleNew = async () => {
         window.location.href = '/';
+    };
+
+    // ── 本地 STT（Web Speech API）──────────────────────────────────────────────
+    const toggleLocalRecording = () => {
+        if (isProcessingVoice) return;
+
+        if (isRecording) {
+            recognitionRef.current?.stop();
+            return;
+        }
+
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert('当前浏览器不支持本地语音识别，请切换为云端模式。');
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'zh-CN';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognitionRef.current = recognition;
+
+        recognition.onstart = () => setIsRecording(true);
+
+        recognition.onresult = async (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            recognition.stop();
+            setIsRecording(false);
+            setIsProcessingVoice(true);
+            const t0 = Date.now();
+            const logs: string[] = [];
+            const addLog = (msg: string) => { logs.push(msg); console.log(`[Voice-Local] ${msg}`); };
+            addLog(`本地 STT 完成: <100ms\n识别结果: "${transcript}"`);
+            try {
+                const t2 = Date.now();
+                const intentRes = await fetch('/api/voice-intent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...auth.getAuthHeaders() },
+                    body: JSON.stringify({ transcript })
+                });
+                const intentData = await intentRes.json();
+                addLog(`语音意图+工具调用完成: ${Date.now() - t2}ms`);
+                if (!intentRes.ok || !intentData.success) throw new Error(intentData.error || '意图解析失败');
+                const t3 = Date.now();
+                await fetchActivities({ force: true });
+                addLog(`列表刷新完成: ${Date.now() - t3}ms`);
+                addLog(`全链路总计: ${Date.now() - t0}ms`);
+                setVoiceLog(logs.join('\n'));
+            } catch (err: any) {
+                console.error('Local voice error:', err);
+                alert('语音处理失败：' + err.message);
+            } finally {
+                setIsProcessingVoice(false);
+            }
+        };
+
+        recognition.onerror = (event: any) => {
+            setIsRecording(false);
+            if (event.error !== 'aborted') alert('语音识别错误：' + event.error);
+        };
+
+        recognition.onend = () => setIsRecording(false);
+
+        recognition.start();
     };
 
     const toggleRecording = async () => {
@@ -287,9 +356,9 @@ export default function TasksPage() {
             </div>
 
             {/* FAB */}
-            <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2">
+            <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
                 <button
-                    onClick={toggleRecording}
+                    onClick={sttMode === 'local' ? toggleLocalRecording : toggleRecording}
                     disabled={isProcessingVoice}
                     className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${isRecording ? 'bg-red-500 scale-110 animate-pulse' : 'bg-zinc-50 hover:scale-105 active:scale-95'} ${isProcessingVoice ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
@@ -298,6 +367,12 @@ export default function TasksPage() {
                     ) : (
                         <Mic size={24} className={isRecording ? 'text-white' : 'text-zinc-950'} />
                     )}
+                </button>
+                <button
+                    onClick={() => setSttMode(m => m === 'local' ? 'server' : 'local')}
+                    className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                >
+                    {sttMode === 'local' ? '本地' : '云端'}
                 </button>
             </div>
 
