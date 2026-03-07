@@ -271,7 +271,7 @@ export default function TasksPage() {
             </div>
 
             {/* FAB */}
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+            <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2">
                 <button
                     onClick={toggleRecording}
                     disabled={isProcessingVoice}

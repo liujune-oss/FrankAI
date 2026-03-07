@@ -254,6 +254,7 @@ async function main() {
       try {
         info('步骤三：结构化 JSON 提取...');
         const systemPrompt = `你是日程管理专家。从用户的口语输入中提取日程字段，输出严格符合 JSON Schema 的对象。
+所有文字字段（title、description 等）必须使用简体中文。
 相对时间需转为绝对时间，当前基准时间: ${nowISO}（北京时间 = UTC+8，即 +08:00）。`;
 
         const extractResult = await genai.models.generateContent({
