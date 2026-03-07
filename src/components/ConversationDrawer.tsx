@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Conversation } from "@/lib/conversations";
 import versionData from "../../version.json";
-import { Beaker, CheckSquare, Calendar, MessageSquare } from "lucide-react";
+import { Beaker, CheckSquare, Calendar, MessageSquare, FolderKanban } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -117,6 +117,17 @@ export default function ConversationDrawer({
                     >
                         <Calendar size={16} />
                         <span className="text-sm font-medium">日程 (Calendar)</span>
+                    </Link>
+                    <Link
+                        href="/projects"
+                        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${pathname === "/projects" || pathname.startsWith("/projects/")
+                            ? "bg-foreground/10 text-foreground font-semibold"
+                            : "hover:bg-muted text-foreground"
+                            }`}
+                        onClick={onClose}
+                    >
+                        <FolderKanban size={16} />
+                        <span className="text-sm font-medium">项目 (Projects)</span>
                     </Link>
 
                     <div className="text-xs font-semibold text-muted-foreground px-3 pt-4 pb-1">历史对话 History</div>

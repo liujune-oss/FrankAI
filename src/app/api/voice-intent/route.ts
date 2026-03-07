@@ -4,6 +4,7 @@ import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
 import { checkChatRateLimit } from '@/lib/ratelimit';
 import { getConfig } from '@/lib/config';
 import { executeUpsertActivity, UPSERT_ACTIVITY_DECLARATION, UpsertActivityArgs } from '@/lib/activity-tool';
+import { executeUpsertProject, UPSERT_PROJECT_DECLARATION, UpsertProjectArgs } from '@/lib/project-tool';
 
 export const maxDuration = 30;
 
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
             contents: [{ role: 'user', parts: [{ text: transcript }] }],
             config: {
                 systemInstruction,
-                tools: [{ functionDeclarations: [UPSERT_ACTIVITY_DECLARATION] }] as any,
+                tools: [{ functionDeclarations: [UPSERT_ACTIVITY_DECLARATION, UPSERT_PROJECT_DECLARATION] }] as any,
             },
         });
 
@@ -59,7 +60,12 @@ export async function POST(req: NextRequest) {
         }
 
         const fc = toolCall.functionCall;
-        const toolResult = await executeUpsertActivity(fc.args as UpsertActivityArgs, authPayload.uid);
+        let toolResult: string;
+        if (fc.name === 'upsert_project') {
+            toolResult = await executeUpsertProject(fc.args as UpsertProjectArgs, authPayload.uid);
+        } else {
+            toolResult = await executeUpsertActivity(fc.args as UpsertActivityArgs, authPayload.uid);
+        }
         const parsed = JSON.parse(toolResult);
 
         return NextResponse.json({ success: true, transcript, activity: parsed });

@@ -33,8 +33,10 @@ export async function GET(req: Request) {
             .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
+        const projectId = searchParams.get('project_id');
         if (type) query = query.eq('type', type);
         if (status) query = query.eq('status', status);
+        if (projectId) query = query.eq('project_id', projectId);
 
         // Time range filtering
         if (startDate) query = query.gte('start_time', startDate);

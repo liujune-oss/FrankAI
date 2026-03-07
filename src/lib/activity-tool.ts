@@ -65,7 +65,7 @@ export async function executeUpsertActivity(args: UpsertActivityArgs, userId: st
             payload.end_time = start.toISOString();
         }
 
-        const allowedKeys = ['id', 'user_id', 'type', 'title', 'description', 'start_time', 'end_time', 'is_all_day', 'location', 'priority', 'status', 'repetition_rule', 'tags', 'metadata'];
+        const allowedKeys = ['id', 'user_id', 'type', 'title', 'description', 'start_time', 'end_time', 'is_all_day', 'location', 'priority', 'status', 'repetition_rule', 'tags', 'metadata', 'project_id'];
         Object.keys(payload).forEach(key => { if (!allowedKeys.includes(key)) delete (payload as Record<string, unknown>)[key]; });
 
         if (payload.id) {
