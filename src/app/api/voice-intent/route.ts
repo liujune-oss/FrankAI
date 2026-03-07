@@ -68,6 +68,11 @@ export async function POST(req: NextRequest) {
         } else {
             toolResult = await executeUpsertActivity(fc.args as UpsertActivityArgs, authPayload.uid);
         }
+
+        if (toolResult.startsWith('[FAILED]') || toolResult.startsWith('Error:')) {
+            return NextResponse.json({ success: false, error: toolResult }, { status: 500 });
+        }
+
         const parsed = JSON.parse(toolResult);
 
         return NextResponse.json({ success: true, transcript, activity: parsed });

@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
                 role: 'user',
                 parts: [
                     { inlineData: { data: base64Data, mimeType } },
-                    { text: '请逐字转写音频，然后根据内容调用 upsert_activity 创建对应记录。' }
+                    { text: '请逐字转写音频，然后根据内容选择合适的工具：创建项目用 upsert_project，创建任务/日程/随手记用 upsert_activity。' }
                 ]
             }],
             config: {
@@ -89,9 +89,13 @@ export async function POST(req: NextRequest) {
         } else {
             toolResult = await executeUpsertActivity(fc.args as UpsertActivityArgs, authPayload.uid);
         }
-        const parsed = JSON.parse(toolResult);
 
-        return NextResponse.json({ success: true, transcript, activity: parsed });
+        if (toolResult.startsWith('[FAILED]') || toolResult.startsWith('Error:')) {
+            return NextResponse.json({ success: false, error: toolResult }, { status: 500 });
+        }
+
+        const parsed = JSON.parse(toolResult);
+        return NextResponse.json({ success: true, transcript, activity: parsed, tool: fc.name });
     } catch (error: any) {
         console.error('voice-intent-audio error:', error);
         return NextResponse.json({ error: error.message || 'Internal error' }, { status: 500 });
