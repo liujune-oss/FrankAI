@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { verifyToken, getAuthFromHeaders } from '@/lib/auth';
+import { getConfig } from '@/lib/config';
 
 export async function POST(req: NextRequest) {
     try {
@@ -22,9 +23,10 @@ export async function POST(req: NextRequest) {
         const mimeType = audioFile.type || 'audio/webm';
 
         const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
+        const sttModel = await getConfig<string>('voice_stt_model');
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: sttModel,
             contents: [
                 {
                     role: 'user',

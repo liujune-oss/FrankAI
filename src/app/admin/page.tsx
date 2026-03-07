@@ -62,6 +62,7 @@ export default function AdminDashboard() {
     const [chatModels, setChatModels] = useState<ChatModel[]>([]);
     const [defaultChatModel, setDefaultChatModel] = useState('');
     const [memorySummaryModel, setMemorySummaryModel] = useState('');
+    const [voiceSttModel, setVoiceSttModel] = useState('');
     const [voiceIntentModel, setVoiceIntentModel] = useState('');
     const [memoryEmbeddingModel, setMemoryEmbeddingModel] = useState('');
     const [imageGenModel, setImageGenModel] = useState('');
@@ -140,6 +141,7 @@ export default function AdminDashboard() {
                 setChatModels(Array.isArray(c.chat_models) ? c.chat_models : []);
                 setDefaultChatModel(c.default_chat_model || '');
                 setMemorySummaryModel(c.memory_summary_model || '');
+                setVoiceSttModel(c.voice_stt_model || '');
                 setVoiceIntentModel(c.voice_intent_model || '');
                 setMemoryEmbeddingModel(c.memory_embedding_model || '');
                 setImageGenModel(c.image_gen_model || '');
@@ -262,6 +264,7 @@ export default function AdminDashboard() {
                 { key: 'chat_models', value: chatModels },
                 { key: 'default_chat_model', value: defaultChatModel },
                 { key: 'memory_summary_model', value: memorySummaryModel },
+                { key: 'voice_stt_model', value: voiceSttModel },
                 { key: 'voice_intent_model', value: voiceIntentModel },
                 { key: 'memory_embedding_model', value: memoryEmbeddingModel },
                 { key: 'image_gen_model', value: imageGenModel },
@@ -658,6 +661,13 @@ export default function AdminDashboard() {
                                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">记忆摘要模型</label>
                                                 <select value={memorySummaryModel} onChange={e => { setMemorySummaryModel(e.target.value); setConfigDirty(true); }} className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-purple-500">
                                                     {!allModelOptions.some(m => m.id === memorySummaryModel) && <option value={memorySummaryModel}>{memorySummaryModel}</option>}
+                                                    {allModelOptions.map(m => <option key={m.id} value={m.id}>{m.label} ({m.id})</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">语音转文字模型（STT）</label>
+                                                <select value={voiceSttModel} onChange={e => { setVoiceSttModel(e.target.value); setConfigDirty(true); }} className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-purple-500">
+                                                    {!allModelOptions.some(m => m.id === voiceSttModel) && <option value={voiceSttModel}>{voiceSttModel}</option>}
                                                     {allModelOptions.map(m => <option key={m.id} value={m.id}>{m.label} ({m.id})</option>)}
                                                 </select>
                                             </div>
