@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
         const localTime = new Date(now.getTime() + 8 * 3600000).toISOString().replace('Z', '+08:00');
         const systemInstruction =
             `Current UTC time: ${now.toISOString()} (Shanghai local: ${localTime}). ` +
-            `Extract the user's intent and call upsert_activity. No reply text needed.`;
+            `Extract the user's intent and call the appropriate tool: ` +
+            `upsert_project if the user wants to create/update a project, ` +
+            `upsert_activity for tasks, events, reminders, or logs. No reply text needed.`;
 
         const stream = genai.models.generateContentStream({
             model,

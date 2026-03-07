@@ -41,7 +41,9 @@ export async function POST(req: NextRequest) {
         const systemInstruction =
             `Current UTC time: ${now.toISOString()} (Shanghai local: ${localTime}). ` +
             `First, accurately transcribe every word in the audio as-is (output the full transcript text). ` +
-            `Then, based on the transcript, call upsert_activity to create the task/event/log.`;
+            `Then, based on the transcript, call the appropriate tool: ` +
+            `upsert_project if the user wants to create/update a project, ` +
+            `upsert_activity for tasks, events, reminders, or logs.`;
 
         const stream = genai.models.generateContentStream({
             model,
