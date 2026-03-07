@@ -23,8 +23,8 @@ export default function TasksPage() {
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<BlobPart[]>([]);
 
-    // STT mode: 'deepgram' = streaming WebSocket, 'local' = Web Speech API, 'server' = Gemini STT
-    const [sttMode, setSttMode] = useState<'deepgram' | 'local' | 'server'>('deepgram');
+    // STT mode: 'server' = Gemini 合并(转写+意图), 'deepgram' = streaming WebSocket, 'local' = Web Speech API
+    const [sttMode, setSttMode] = useState<'deepgram' | 'local' | 'server'>('server');
     const recognitionRef = useRef<any>(null);
     const deepgramWsRef = useRef<WebSocket | null>(null);
     const [liveTranscript, setLiveTranscript] = useState('');
@@ -293,11 +293,11 @@ export default function TasksPage() {
                 const addLog = (msg: string) => { logs.push(msg); console.log(`[Voice] ${msg}`); };
                 addLog(`音频大小: ${(audioBlob.size / 1024).toFixed(1)}KB`);
                 try {
-                    // 1. Send to Speech-to-Text
+                    // 一步到位：音频 → Gemini（转写 + 意图 + 工具调用）
                     const formData = new FormData();
                     formData.append('audio', audioBlob, 'record.webm');
 
-                    const sttRes = await fetch('/api/speech-to-text', {
+                    const res = await fetch('/api/voice-intent-audio', {
                         method: 'POST',
                         headers: {
                             'x-activation-token': auth.getAuthHeaders()['x-activation-token'],
@@ -306,31 +306,15 @@ export default function TasksPage() {
                         body: formData
                     });
 
-                    if (!sttRes.ok) throw new Error('STT request failed');
-                    const { transcript } = await sttRes.json();
-                    addLog(`STT 完成: ${Date.now() - t0}ms\n识别结果: "${transcript}"`);
+                    const data = await res.json();
+                    addLog(`Gemini 转写+意图+工具调用: ${Date.now() - t0}ms\n识别结果: "${data.transcript || ''}"`);
+                    if (!res.ok || !data.success) throw new Error(data.error || '语音处理失败');
 
-                    if (transcript && transcript.trim() !== '') {
-                        // 2. 调用轻量语音意图端点（无 RAG / 无 Phase 2）
-                        const t2 = Date.now();
-                        const intentRes = await fetch('/api/voice-intent', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', ...auth.getAuthHeaders() },
-                            body: JSON.stringify({ transcript })
-                        });
-
-                        const intentData = await intentRes.json();
-                        addLog(`语音意图+工具调用完成: ${Date.now() - t2}ms`);
-                        if (!intentRes.ok || !intentData.success) {
-                            throw new Error(intentData.error || '意图解析失败');
-                        }
-                        // Refresh the UI explicitly just in case Event Listener misses
-                        const t3 = Date.now();
-                        await fetchActivities({ force: true });
-                        addLog(`列表刷新完成: ${Date.now() - t3}ms`);
-                        addLog(`全链路总计: ${Date.now() - t0}ms`);
-                        setVoiceLog(logs.join('\n'));
-                    }
+                    const t3 = Date.now();
+                    await fetchActivities({ force: true });
+                    addLog(`列表刷新完成: ${Date.now() - t3}ms`);
+                    addLog(`全链路总计: ${Date.now() - t0}ms`);
+                    setVoiceLog(logs.join('\n'));
                 } catch (err) {
                     console.error("Voice processing error:", err);
                     alert("语音处理失败，请重试或检查后端的 STT 接口配置");
