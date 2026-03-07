@@ -19,6 +19,7 @@ export default function TasksPage() {
     // Voice recording state
     const [isRecording, setIsRecording] = useState(false);
     const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+    const [voiceIntentModel, setVoiceIntentModel] = useState('gemini-3.1-flash-lite-preview');
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<BlobPart[]>([]);
 
@@ -32,6 +33,14 @@ export default function TasksPage() {
         if (localStorage.getItem('sandbox_enabled') === 'true') setIsAdmin(true);
         fetch('/api/admin/check').then(res => { if (res.ok) setIsAdmin(true); }).catch(() => { });
     }, []);
+
+    useEffect(() => {
+        if (!auth.isActivated) return;
+        fetch('/api/config', { headers: auth.getAuthHeaders() })
+            .then(res => res.ok ? res.json() : null)
+            .then(data => { if (data?.voiceIntentModel) setVoiceIntentModel(data.voiceIntentModel); })
+            .catch(() => { });
+    }, [auth.isActivated]);
 
     useEffect(() => {
         if (auth.isActivated) {
@@ -118,7 +127,7 @@ export default function TasksPage() {
 
                     if (transcript && transcript.trim() !== '') {
                         // 2. Send transcript to Chat AI as a background command
-                        const chatRes = await fetch('/api/chat?model=gemini-2.0-flash', {
+                        const chatRes = await fetch(`/api/chat?model=${voiceIntentModel}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', ...auth.getAuthHeaders() },
                             body: JSON.stringify({

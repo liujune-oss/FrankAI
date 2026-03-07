@@ -2,7 +2,7 @@
 
 > 只放"现在要做的事"，完成后移入 BACKLOG.md 的已完成区。
 > 更多待办见 `BACKLOG.md`，版本规划见 `docs/roadmap.md`。
-> 当前版本：v1.8.57
+> 当前版本：v1.8.58
 
 ---
 
@@ -20,6 +20,7 @@
 
 ## ✅ 最近完成
 
+- v1.8.58：语音意图模型独立配置（voice_intent_model），默认 gemini-3.1-flash-lite-preview，与聊天模型解耦
 - v1.8.57：任务页语音工具调用从 gemini-2.5-pro 改为 gemini-2.0-flash，大幅提升响应速度
 - v1.8.56：清理旧记忆表 memories_tier1/user_vectors，迁移至 memories_chunks，删除死路由 /api/vectorize（B11）
 - v1.8.55：语音按钮适配 iOS safe-area，修复底部超出问题

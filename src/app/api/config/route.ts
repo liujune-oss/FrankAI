@@ -12,11 +12,12 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const configs = await getConfigs(['chat_models', 'default_chat_model']);
+        const configs = await getConfigs(['chat_models', 'default_chat_model', 'voice_intent_model']);
         return NextResponse.json({
             success: true,
             chatModels: configs.chat_models,
             defaultChatModel: configs.default_chat_model,
+            voiceIntentModel: configs.voice_intent_model,
         });
     } catch (error: any) {
         console.error('Config GET error:', error);
