@@ -120,6 +120,7 @@ export default function ConversationDrawer({
 
                 {/* ── Fixed bottom ──────────────────────────────────────────── */}
                 <div className="flex-none border-t">
+                    {isAdmin && (
                     <button
                         onClick={() => setShowSettings(v => !v)}
                         className="w-full flex items-center justify-between px-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -127,8 +128,9 @@ export default function ConversationDrawer({
                         <span className="flex items-center gap-2"><Settings size={14} />设置</span>
                         <ChevronDown size={14} className={`transition-transform ${showSettings ? "rotate-180" : ""}`} />
                     </button>
+                    )}
 
-                    {showSettings && (
+                    {isAdmin && showSettings && (
                         <div className="px-3 pb-3 space-y-1">
                             <button
                                 onClick={() => { onClose(); onOpenMemoryManager(); }}
@@ -151,14 +153,12 @@ export default function ConversationDrawer({
                             >
                                 <RefreshCw size={13} />强制刷新缓存
                             </button>
-                            {isAdmin && (
-                                <button
-                                    onClick={() => { onClose(); onOpenSandbox(); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-purple-400 hover:text-purple-300 rounded-lg hover:bg-purple-500/10 transition-colors"
-                                >
-                                    <Beaker size={13} />技能靶场
-                                </button>
-                            )}
+                            <button
+                                onClick={() => { onClose(); onOpenSandbox(); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-purple-400 hover:text-purple-300 rounded-lg hover:bg-purple-500/10 transition-colors"
+                            >
+                                <Beaker size={13} />技能靶场
+                            </button>
                         </div>
                     )}
 

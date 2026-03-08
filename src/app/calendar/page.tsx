@@ -44,16 +44,18 @@ export default function CalendarPage() {
         if (auth.isActivated) fetchActivities();
     }, [auth.isActivated, fetchActivities]);
 
-    // 初始化时滚动到今天（每个日期格宽约 64px = 56 min-w + 8 gap）
+    const PAST_DAYS = 30;
+    const FUTURE_DAYS = 60;
+
+    // 初始化时滚动到今天（56px宽 + 8px gap = 64px/格，容器左padding=16px）
     useEffect(() => {
         if (dateTapeRef.current) {
             const itemWidth = 64;
-            dateTapeRef.current.scrollLeft = PAST_DAYS * itemWidth - dateTapeRef.current.clientWidth / 2 + itemWidth / 2;
+            const leftPadding = 16;
+            const containerWidth = dateTapeRef.current.clientWidth;
+            dateTapeRef.current.scrollLeft = leftPadding + PAST_DAYS * itemWidth + 56 / 2 - containerWidth / 2;
         }
     }, []);
-
-    const PAST_DAYS = 30;
-    const FUTURE_DAYS = 60;
     const dateTape = useMemo(() => {
         const today = startOfToday();
         const start = addDays(today, -PAST_DAYS);
@@ -247,6 +249,7 @@ export default function CalendarPage() {
             >
                 {dateTape.map((date, i) => {
                     const isSelected = isSameDay(date, selectedDate);
+                    const isToday = isSameDay(date, startOfToday());
                     const dots = getDotsForDate(date);
                     return (
                         <div
@@ -254,13 +257,13 @@ export default function CalendarPage() {
                             onClick={() => setSelectedDate(date)}
                             className={`flex flex-col items-center min-w-[56px] py-2 px-1 rounded-xl cursor-pointer transition-colors ${isSelected ? 'bg-zinc-50' : 'hover:bg-zinc-900'}`}
                         >
-                            <span className={`text-[10px] font-semibold mb-1 ${isSelected ? 'text-zinc-900' : 'text-zinc-500'}`}>{format(date, 'EEE')}</span>
-                            <span className={`text-base font-semibold mb-1.5 ${isSelected ? 'text-zinc-900' : 'text-zinc-50'}`}>{format(date, 'd')}</span>
+                            <span className={`text-[10px] font-semibold mb-1 ${isSelected ? 'text-zinc-900' : isToday ? 'text-blue-400' : 'text-zinc-500'}`}>{format(date, 'EEE')}</span>
+                            <span className={`text-base font-semibold mb-1.5 ${isSelected ? 'text-zinc-900' : isToday ? 'text-blue-400' : 'text-zinc-50'}`}>{format(date, 'd')}</span>
                             <div className="flex gap-0.5 h-1">
                                 {dots.length > 0 ? dots.map((dotClass, idx) => (
                                     <div key={idx} className={`w-1 h-1 rounded-full ${dotClass}`} />
                                 )) : (
-                                    <div className={`w-1 h-1 rounded-full ${isSelected ? 'bg-zinc-900' : 'bg-transparent'}`} />
+                                    <div className={`w-1 h-1 rounded-full ${isSelected ? 'bg-zinc-900' : isToday ? 'bg-blue-400' : 'bg-transparent'}`} />
                                 )}
                             </div>
                         </div>
