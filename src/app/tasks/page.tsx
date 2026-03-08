@@ -16,7 +16,38 @@ export default function TasksPage() {
     const [activeId, setActiveId] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);
     const { activities, fetchActivities, isLoading, updateActivity, deleteActivity } = useActivities();
-    const [filter, setFilter] = useState<'all' | 'task' | 'event' | 'log'>('all');
+
+    const ALL_TYPES = ['task', 'event', 'reminder', 'log', 'milestone'] as const;
+    type FilterType = typeof ALL_TYPES[number];
+    const [selectedTypes, setSelectedTypes] = useState<Set<FilterType>>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem('task_filter_types');
+                if (saved) {
+                    const arr = JSON.parse(saved) as FilterType[];
+                    const valid = arr.filter(t => (ALL_TYPES as readonly string[]).includes(t));
+                    if (valid.length > 0) return new Set(valid);
+                }
+            } catch { }
+        }
+        return new Set(ALL_TYPES);
+    });
+
+    useEffect(() => {
+        localStorage.setItem('task_filter_types', JSON.stringify([...selectedTypes]));
+    }, [selectedTypes]);
+
+    const isAllSelected = selectedTypes.size === ALL_TYPES.length;
+    const toggleType = (type: FilterType) => {
+        setSelectedTypes(prev => {
+            const next = new Set(prev);
+            next.has(type) ? next.delete(type) : next.add(type);
+            return next;
+        });
+    };
+    const toggleAll = () => {
+        setSelectedTypes(isAllSelected ? new Set() : new Set(ALL_TYPES));
+    };
 
     // Voice recording state
     const [isRecording, setIsRecording] = useState(false);
@@ -408,22 +439,12 @@ export default function TasksPage() {
 
             {/* Filters */}
             <div className="flex items-center gap-2 px-4 py-2 overflow-x-auto no-scrollbar flex-none">
-                <button
-                    onClick={() => setFilter('all')}
-                    className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${filter === 'all' ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}
-                >全部</button>
-                <button
-                    onClick={() => setFilter('task')}
-                    className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${filter === 'task' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}
-                >待办</button>
-                <button
-                    onClick={() => setFilter('event')}
-                    className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${filter === 'event' ? 'bg-blue-500/20 text-blue-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}
-                >日程</button>
-                <button
-                    onClick={() => setFilter('log')}
-                    className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${filter === 'log' ? 'bg-purple-500/20 text-purple-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}
-                >随手记</button>
+                <button onClick={toggleAll} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${isAllSelected ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>全部</button>
+                <button onClick={() => toggleType('task')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('task') ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>待办</button>
+                <button onClick={() => toggleType('event')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('event') ? 'bg-blue-500/20 text-blue-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>日程</button>
+                <button onClick={() => toggleType('reminder')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('reminder') ? 'bg-pink-500/20 text-pink-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>提醒</button>
+                <button onClick={() => toggleType('log')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('log') ? 'bg-purple-500/20 text-purple-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>随手记</button>
+                <button onClick={() => toggleType('milestone')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('milestone') ? 'bg-amber-500/20 text-amber-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>里程碑</button>
             </div>
 
             {/* List */}
@@ -431,7 +452,7 @@ export default function TasksPage() {
                 {isLoading ? (
                     <div className="text-center text-sm text-zinc-500 py-10">加载中...</div>
                 ) : (() => {
-                    const filtered = activities.filter(a => filter === 'all' || a.type === filter);
+                    const filtered = activities.filter(a => selectedTypes.has(a.type as FilterType));
                     const activeItems = filtered.filter(a => a.status !== 'completed' && a.status !== 'cancelled');
                     const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
                     const completedItems = filtered.filter(a => (a.status === 'completed' || a.status === 'cancelled') && new Date(a.updated_at) >= cutoff);
@@ -506,7 +527,7 @@ export default function TasksPage() {
                     };
 
                     if (filtered.length === 0) return (
-                        <div className="text-center text-sm text-zinc-500 py-10">暂无{filter === 'all' ? '待办事项' : filter === 'task' ? '待办事项' : filter === 'event' ? '日程安排' : '随手记录'}</div>
+                        <div className="text-center text-sm text-zinc-500 py-10">暂无匹配的活动</div>
                     );
 
                     return (
