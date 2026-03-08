@@ -17,6 +17,20 @@ import { ChatMessage } from "@/types/chat";
 
 // ── Cloud sync helpers ──────────────────────────────────────────────────
 
+const LAST_SYNC_TS_KEY = "conv_last_sync_ts";
+/** 首次同步用 epoch，拉取全量 */
+const EPOCH_ISO = "1970-01-01T00:00:00.000Z";
+
+function getLastSyncTs(): string {
+    if (typeof window === "undefined") return EPOCH_ISO;
+    return localStorage.getItem(LAST_SYNC_TS_KEY) || EPOCH_ISO;
+}
+
+function setLastSyncTs(isoTs: string): void {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(LAST_SYNC_TS_KEY, isoTs);
+}
+
 function getCloudAuthHeaders(): Record<string, string> {
     if (typeof window === "undefined") return {};
     const token = localStorage.getItem("activation-token") || "";
@@ -42,15 +56,15 @@ function stripImages(conv: Conversation): Conversation {
 /** 后台 upsert 一条对话到云端，不阻塞 UI */
 function syncConvToCloud(conv: Conversation): void {
     const headers = getCloudAuthHeaders();
-    if (!headers["x-activation-token"]) return; // 未激活时跳过
+    if (!headers["x-activation-token"]) return;
     fetch("/api/conversations/sync", {
         method: "POST",
         headers,
         body: JSON.stringify({ conversation: stripImages(conv) }),
-    }).catch(() => {}); // fire-and-forget
+    }).catch(() => {});
 }
 
-/** 后台删除云端一条对话 */
+/** 后台写墓碑（服务端保留记录但清空内容），不阻塞 UI */
 function deleteConvFromCloud(id: string): void {
     const headers = getCloudAuthHeaders();
     if (!headers["x-activation-token"]) return;
@@ -61,7 +75,7 @@ function deleteConvFromCloud(id: string): void {
     }).catch(() => {});
 }
 
-/** 后台清空云端全部对话 */
+/** 后台清空云端全部对话（用户主动操作，真删） */
 function clearAllConvsFromCloud(): void {
     const headers = getCloudAuthHeaders();
     if (!headers["x-activation-token"]) return;
@@ -73,53 +87,64 @@ function clearAllConvsFromCloud(): void {
 }
 
 /**
- * 启动时双向同步：
- * 1. 拉取云端对话列表
- * 2. 将云端更新版本写入 IndexedDB
- * 3. 将本地独有的对话推送到云端
- * 返回更新后的 Conversation[]（按 updatedAt 降序）
+ * 增量同步：
+ * 1. 用 last_sync_ts 拉取云端变化（含墓碑）
+ * 2. 墓碑 → 本地删除；活跃记录 → 后写优先 upsert
+ * 3. 全量同步时（首次/重置），将本地独有对话推回云端
+ * 4. 用响应中的 serverTime 更新 last_sync_ts（用服务器时钟，避免偏差）
  */
 async function mergeWithCloud(localConvs: Conversation[]): Promise<Conversation[]> {
     const headers = getCloudAuthHeaders();
     if (!headers["x-activation-token"]) return localConvs;
 
-    let cloudConvs: Conversation[] = [];
+    const since = getLastSyncTs();
+    const isFullSync = since === EPOCH_ISO;
+
+    type CloudConv = Conversation & { deletedAt: number | null };
+    let cloudChanges: CloudConv[] = [];
+    let serverTime = new Date().toISOString();
+
     try {
-        const res = await fetch("/api/conversations/sync", { headers });
+        const url = isFullSync
+            ? "/api/conversations/sync"
+            : `/api/conversations/sync?since=${encodeURIComponent(since)}`;
+        const res = await fetch(url, { headers });
         if (!res.ok) return localConvs;
         const data = await res.json();
-        cloudConvs = data.conversations ?? [];
+        cloudChanges = data.conversations ?? [];
+        if (data.serverTime) serverTime = data.serverTime;
     } catch {
         return localConvs; // 网络异常时静默降级
     }
 
     const localMap = new Map(localConvs.map((c) => [c.id, c]));
-    const cloudMap = new Map(cloudConvs.map((c) => [c.id, c]));
 
-    // 云端更新 → 写入 IndexedDB
-    for (const cloudConv of cloudConvs) {
-        const local = localMap.get(cloudConv.id);
-        if (!local || cloudConv.updatedAt > local.updatedAt) {
-            await saveConversation(cloudConv);
-            localMap.set(cloudConv.id, cloudConv);
-        }
-    }
-
-    const GRACE_MS = 10 * 60 * 1000; // 10 分钟宽限期
-    for (const localConv of localConvs) {
-        if (!cloudMap.has(localConv.id)) {
-            if (Date.now() - localConv.updatedAt > GRACE_MS) {
-                // 超过宽限期且云端不存在 → 视为其他设备已删除，本地同步删除
-                await deleteConversation(localConv.id);
-                localMap.delete(localConv.id);
-            } else {
-                // 宽限期内 → 视为本地新建未同步，推回云端
-                syncConvToCloud(localConv);
+    for (const change of cloudChanges) {
+        if (change.deletedAt) {
+            // 墓碑 → 删除本地
+            await deleteConversation(change.id);
+            localMap.delete(change.id);
+        } else {
+            // 活跃 → 后写优先：云端更新则覆盖本地
+            const local = localMap.get(change.id);
+            if (!local || change.updatedAt > local.updatedAt) {
+                await saveConversation(change);
+                localMap.set(change.id, change);
             }
         }
     }
 
-    // 返回合并后列表（按 updatedAt 降序）
+    // 全量同步时：本地独有对话（未曾推送到云端）→ 推回云端
+    if (isFullSync) {
+        const cloudIds = new Set(cloudChanges.map((c) => c.id));
+        for (const local of localConvs) {
+            if (!cloudIds.has(local.id)) {
+                syncConvToCloud(local);
+            }
+        }
+    }
+
+    setLastSyncTs(serverTime);
     return Array.from(localMap.values()).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 

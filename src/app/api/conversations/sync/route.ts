@@ -10,33 +10,48 @@ async function getUserId(req: NextRequest): Promise<string | null> {
     return payload.uid as string;
 }
 
-// GET: 拉取用户所有云端对话
+// GET: 增量拉取
+// ?since=ISO_timestamp → 只返回 updated_at > since 的记录（含墓碑）
+// 不传 since → 全量拉取
+// 响应包含 serverTime，客户端用它作为下次 since，避免时钟偏差
 export async function GET(req: NextRequest) {
     const userId = await getUserId(req);
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (!supabaseAdmin) return NextResponse.json({ error: "DB unavailable" }, { status: 503 });
 
-    const { data, error } = await supabaseAdmin
+    const since = req.nextUrl.searchParams.get("since");
+
+    let query = supabaseAdmin
         .from("conversations")
-        .select("id, title, messages, created_at, updated_at")
+        .select("id, title, messages, created_at, updated_at, deleted_at")
         .eq("user_id", userId)
         .order("updated_at", { ascending: false });
 
+    if (since) {
+        query = query.gt("updated_at", since);
+    }
+
+    const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // 将 snake_case 转回 camelCase 供前端使用
     const conversations = (data ?? []).map((row) => ({
         id: row.id,
-        title: row.title,
+        title: row.title ?? "",
         messages: row.messages ?? [],
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
+        createdAt: new Date(row.created_at).getTime(),
+        updatedAt: new Date(row.updated_at).getTime(),
+        deletedAt: row.deleted_at ? new Date(row.deleted_at).getTime() : null,
     }));
 
-    return NextResponse.json({ conversations });
+    return NextResponse.json({
+        conversations,
+        serverTime: new Date().toISOString(),
+    });
 }
 
 // POST: 写入/更新一条对话（upsert）
+// updated_at 由服务器生成，不信任客户端时钟
+// 响应返回服务器生成的 updatedAt（ms），客户端可更新本地记录
 export async function POST(req: NextRequest) {
     const userId = await getUserId(req);
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -46,23 +61,26 @@ export async function POST(req: NextRequest) {
     const conv = body?.conversation;
     if (!conv?.id) return NextResponse.json({ error: "Invalid" }, { status: 400 });
 
+    const now = new Date().toISOString();
+
     const { error } = await supabaseAdmin.from("conversations").upsert(
         {
             id: conv.id,
             user_id: userId,
             title: conv.title ?? "新会话",
             messages: conv.messages ?? [],
-            created_at: conv.createdAt,
-            updated_at: conv.updatedAt,
+            created_at: conv.createdAt ? new Date(conv.createdAt).toISOString() : now,
+            updated_at: now,
+            deleted_at: null, // 写入时清除墓碑（防止重建同 ID 对话）
         },
         { onConflict: "id" }
     );
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, updatedAt: new Date(now).getTime() });
 }
 
-// DELETE: 删除一条或全部对话
+// DELETE: 单条写墓碑 / 全部真删
 export async function DELETE(req: NextRequest) {
     const userId = await getUserId(req);
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -70,6 +88,7 @@ export async function DELETE(req: NextRequest) {
 
     const body = await req.json();
 
+    // 全部清空 → 用户主动操作，真删（不留墓碑）
     if (body?.all === true) {
         const { error } = await supabaseAdmin
             .from("conversations")
@@ -82,9 +101,16 @@ export async function DELETE(req: NextRequest) {
     const id = body?.id;
     if (!id) return NextResponse.json({ error: "Invalid" }, { status: 400 });
 
+    // 单条删除 → 写墓碑：清空内容只保留 id/user_id，设置 deleted_at
+    const now = new Date().toISOString();
     const { error } = await supabaseAdmin
         .from("conversations")
-        .delete()
+        .update({
+            deleted_at: now,
+            updated_at: now,
+            title: "",
+            messages: [],
+        })
         .eq("id", id)
         .eq("user_id", userId);
 
