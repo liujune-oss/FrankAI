@@ -44,6 +44,7 @@ export default function ConversationDrawer({
     onOpenSandbox,
 }: ConversationDrawerProps) {
     const [showSettings, setShowSettings] = useState(false);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const pathname = usePathname();
 
     return (
@@ -100,7 +101,7 @@ export default function ConversationDrawer({
                         <div
                             key={conv.id}
                             className={`flex items-center rounded-xl px-3 py-2.5 cursor-pointer transition-colors ${activeId === conv.id ? "bg-foreground/10 text-foreground font-semibold" : "hover:bg-muted text-foreground"}`}
-                            onClick={() => onSwitch(conv)}
+                            onClick={() => { setPendingDeleteId(null); onSwitch(conv); }}
                         >
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm truncate font-medium">{conv.title}</p>
@@ -108,12 +109,21 @@ export default function ConversationDrawer({
                                     {new Date(conv.updatedAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                                 </p>
                             </div>
-                            <button
-                                onClick={e => { e.stopPropagation(); if (confirm("确定要删除这个会话吗？")) onDelete(conv.id); }}
-                                className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground/40 hover:text-red-500 transition-all flex-shrink-0"
-                            >
-                                <Trash2 size={14} />
-                            </button>
+                            {pendingDeleteId === conv.id ? (
+                                <button
+                                    onClick={e => { e.stopPropagation(); onDelete(conv.id); setPendingDeleteId(null); }}
+                                    className="px-2 py-1 rounded-lg bg-red-500/20 text-red-400 text-[11px] font-semibold flex-shrink-0 transition-all"
+                                >
+                                    确认
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={e => { e.stopPropagation(); setPendingDeleteId(conv.id); }}
+                                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground/40 hover:text-red-500 transition-all flex-shrink-0"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            )}
                         </div>
                     ))}
                 </div>
