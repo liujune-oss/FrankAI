@@ -64,6 +64,13 @@ export async function executeUpsertActivity(args: UpsertActivityArgs, userId: st
             start.setHours(start.getHours() + 1);
             payload.end_time = start.toISOString();
         }
+        // milestone: prefer start_time; if only end_time set, move it to start_time
+        if (payload.type === 'milestone') {
+            if (!payload.start_time && payload.end_time) {
+                payload.start_time = payload.end_time;
+                payload.end_time = undefined;
+            }
+        }
 
         const allowedKeys = ['id', 'user_id', 'type', 'title', 'description', 'start_time', 'end_time', 'is_all_day', 'location', 'priority', 'status', 'repetition_rule', 'tags', 'metadata', 'project_id'];
         Object.keys(payload).forEach(key => { if (!allowedKeys.includes(key)) delete (payload as Record<string, unknown>)[key]; });

@@ -47,9 +47,12 @@ function ActivityCard({ a, showTypeBadge, onToggle, onDelete }: {
                         </span>
                     )}
                 </div>
-                {(a.start_time || a.end_time) && (
+                {(a.start_time || a.end_time || isMilestone) && (
                     <p className="text-[11px] text-zinc-500 mt-0.5">
-                        {new Date(a.start_time || a.end_time!).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {isMilestone
+                            ? new Date(a.start_time || a.end_time || a.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
+                            : new Date(a.start_time || a.end_time!).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                        }
                     </p>
                 )}
             </div>
