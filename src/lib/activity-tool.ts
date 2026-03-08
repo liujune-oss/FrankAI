@@ -27,7 +27,7 @@ export const UPSERT_ACTIVITY_DECLARATION = {
         properties: {
             title: { type: 'string', description: 'A short, concise title for the activity.' },
             description: { type: 'string', description: 'Detailed description or notes.' },
-            type: { type: 'string', description: 'Category: event, task, reminder, or log.' },
+            type: { type: 'string', description: 'Category: event (meetings, appointments), task (todos), reminder, log, or milestone (key date/achievement in a project).' },
             start_time: { type: 'string', description: 'ISO 8601 UTC start time (e.g. 2026-03-05T07:00:00Z for 3pm Shanghai).' },
             end_time: { type: 'string', description: 'ISO 8601 UTC end time or deadline.' },
             is_all_day: { type: 'boolean', description: 'True if the event lasts the entire day.' },

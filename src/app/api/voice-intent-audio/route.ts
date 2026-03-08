@@ -28,22 +28,28 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
         }
 
+        const projectId = formData.get('project_id') as string | null;
+
         const arrayBuffer = await audioFile.arrayBuffer();
         const base64Data = Buffer.from(arrayBuffer).toString('base64');
         const mimeType = audioFile.type || 'audio/webm';
 
-        // Use the audio-capable model (voice_stt_model supports audio input)
         const model = await getConfig<string>('voice_stt_model');
         const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || '' });
 
         const now = new Date();
         const localTime = new Date(now.getTime() + 8 * 3600000).toISOString().replace('Z', '+08:00');
+        const projectContext = projectId
+            ? ` This is in a project context (project_id: ${projectId}). ` +
+              `Use type=milestone for key dates/achievements, type=event for meetings, type=task for todos, type=reminder for reminders.`
+            : '';
         const systemInstruction =
             `Current UTC time: ${now.toISOString()} (Shanghai local: ${localTime}). ` +
             `First, accurately transcribe every word in the audio as-is (output the full transcript text). ` +
             `Then, based on the transcript, call the appropriate tool: ` +
             `upsert_project if the user wants to create/update a project, ` +
-            `upsert_activity for tasks, events, reminders, or logs.`;
+            `upsert_activity for tasks, events, milestones, reminders, or logs.` +
+            projectContext;
 
         const stream = genai.models.generateContentStream({
             model,
@@ -82,6 +88,11 @@ export async function POST(req: NextRequest) {
 
         const fc = toolCall.functionCall;
         if (!transcript.trim() && fc.args?.title) transcript = fc.args.title;
+
+        // Force project_id onto activity args when in project context
+        if (projectId && fc.name !== 'upsert_project') {
+            (fc.args as any).project_id = projectId;
+        }
 
         let toolResult: string;
         if (fc.name === 'upsert_project') {

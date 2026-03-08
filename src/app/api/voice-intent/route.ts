@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        const { transcript } = await req.json();
+        const { transcript, project_id: projectId } = await req.json();
         if (!transcript?.trim()) {
             return NextResponse.json({ error: 'Missing transcript' }, { status: 400 });
         }
@@ -31,11 +31,15 @@ export async function POST(req: NextRequest) {
 
         const now = new Date();
         const localTime = new Date(now.getTime() + 8 * 3600000).toISOString().replace('Z', '+08:00');
+        const projectContext = projectId
+            ? ` This is in a project context. Use type=milestone for key dates/achievements, type=event for meetings, type=task for todos, type=reminder for reminders.`
+            : '';
         const systemInstruction =
             `Current UTC time: ${now.toISOString()} (Shanghai local: ${localTime}). ` +
             `Extract the user's intent and call the appropriate tool: ` +
             `upsert_project if the user wants to create/update a project, ` +
-            `upsert_activity for tasks, events, reminders, or logs. No reply text needed.`;
+            `upsert_activity for tasks, events, milestones, reminders, or logs. No reply text needed.` +
+            projectContext;
 
         const stream = genai.models.generateContentStream({
             model,
@@ -62,6 +66,10 @@ export async function POST(req: NextRequest) {
         }
 
         const fc = toolCall.functionCall;
+        if (projectId && fc.name !== 'upsert_project') {
+            (fc.args as any).project_id = projectId;
+        }
+
         let toolResult: string;
         if (fc.name === 'upsert_project') {
             toolResult = await executeUpsertProject(fc.args as UpsertProjectArgs, authPayload.uid);
