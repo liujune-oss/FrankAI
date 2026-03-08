@@ -48,17 +48,21 @@ export default function CalendarPage() {
     const FUTURE_DAYS = 60;
 
     // 初始化时滚动到今天（56px宽 + 8px gap = 64px/格，容器左padding=16px）
+    // 依赖 auth.isActivated：未激活时 DOM 不渲染（return null），ref 为 null，需等激活后重跑
     useEffect(() => {
+        if (!auth.isActivated) return;
         const el = dateTapeRef.current;
         if (!el) return;
-        const scroll = () => {
-            const itemWidth = 64;
-            const leftPadding = 16;
-            el.scrollLeft = leftPadding + PAST_DAYS * itemWidth + 56 / 2 - el.clientWidth / 2;
-        };
-        // 延迟一帧确保容器已完成布局，clientWidth 有效
-        requestAnimationFrame(scroll);
-    }, []);
+        // 双 rAF：第一帧提交 DOM，第二帧 layout 计算完成，clientWidth 可靠
+        const id = requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                const itemWidth = 64;
+                const leftPadding = 16;
+                el.scrollLeft = leftPadding + PAST_DAYS * itemWidth + 56 / 2 - el.clientWidth / 2;
+            });
+        });
+        return () => cancelAnimationFrame(id);
+    }, [auth.isActivated]);
     const dateTape = useMemo(() => {
         const today = startOfToday();
         const start = addDays(today, -PAST_DAYS);
