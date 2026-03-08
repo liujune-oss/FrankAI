@@ -433,7 +433,8 @@ export default function TasksPage() {
                 ) : (() => {
                     const filtered = activities.filter(a => filter === 'all' || a.type === filter);
                     const activeItems = filtered.filter(a => a.status !== 'completed' && a.status !== 'cancelled');
-                    const completedItems = filtered.filter(a => a.status === 'completed' || a.status === 'cancelled');
+                    const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
+                    const completedItems = filtered.filter(a => (a.status === 'completed' || a.status === 'cancelled') && new Date(a.updated_at) >= cutoff);
 
                     const renderCard = (activity: Activity) => {
                         const isCompleted = activity.status === 'completed' || activity.status === 'cancelled';
