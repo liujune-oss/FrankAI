@@ -93,6 +93,7 @@ export default function CalendarPage() {
                 setCardProcessingId(activityId);
                 try {
                     const blob = new Blob(chunks, { type: 'audio/webm' });
+                    if (blob.size < 4000) { setCardProcessingId(null); return; } // 静音/太短，跳过
                     const formData = new FormData();
                     formData.append('audio', blob, 'note.webm');
                     const sttRes = await fetch('/api/speech-to-text', {

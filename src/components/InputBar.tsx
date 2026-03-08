@@ -74,6 +74,7 @@ export default function InputBar({
             mediaRecorder.onstop = async () => {
                 stream.getTracks().forEach(t => t.stop());
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                if (audioBlob.size < 4000) return; // 静音/太短，跳过
                 setIsTranscribing(true);
                 try {
                     const formData = new FormData();
