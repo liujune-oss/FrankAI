@@ -38,6 +38,7 @@ type User = {
     id: string;
     username: string;
     is_active: boolean;
+    is_admin: boolean;
     created_at: string;
     activation_codes: Code[];
     user_devices: Device[];
@@ -335,6 +336,20 @@ export default function AdminDashboard() {
             alert('Error creating user');
         } finally {
             setIsCreating(false);
+        }
+    };
+
+    const handleToggleAdmin = async (userId: string, currentStatus: boolean) => {
+        if (!confirm(currentStatus ? '撤销该用户的管理员权限？' : '授予该用户管理员权限？')) return;
+        try {
+            const res = await fetch('/api/admin/users', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, is_admin: !currentStatus }),
+            });
+            if (res.ok) fetchUsers();
+        } catch (err) {
+            console.error(err);
         }
     };
 
@@ -723,6 +738,16 @@ export default function AdminDashboard() {
                                                 className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40 rounded-lg transition-colors border border-blue-200 dark:border-blue-800"
                                             >
                                                 + New Access Code
+                                            </button>
+                                            <button
+                                                onClick={() => handleToggleAdmin(user.id, user.is_admin)}
+                                                className={`flex-none p-2 rounded-lg border transition-colors ${user.is_admin
+                                                    ? 'text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800'
+                                                    : 'text-gray-400 border-gray-200 hover:bg-gray-50 dark:border-gray-700'
+                                                    }`}
+                                                title={user.is_admin ? "撤销管理员" : "设为管理员"}
+                                            >
+                                                <ShieldCheck className="w-5 h-5" />
                                             </button>
                                             <button
                                                 onClick={() => handleToggleUser(user.id, user.is_active)}

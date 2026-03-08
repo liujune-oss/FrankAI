@@ -45,11 +45,15 @@ export default function ChatPage() {
     if (localStorage.getItem('sandbox_enabled') === 'true') {
       setIsAdmin(true);
     }
-    fetch('/api/admin/check')
-      .then(res => {
-        if (res.ok) setIsAdmin(true);
+    const token = localStorage.getItem('activation-token') || '';
+    const fp = localStorage.getItem('device-fingerprint') || '';
+    if (token) {
+      fetch('/api/admin/check', {
+        headers: { 'x-activation-token': token, 'x-device-fingerprint': fp },
       })
-      .catch(() => { });
+        .then(res => { if (res.ok) setIsAdmin(true); })
+        .catch(() => { });
+    }
   }, []);
 
   // ── Auth & activation ──

@@ -5,8 +5,8 @@ const getSecret = () => new TextEncoder().encode(process.env.ACTIVATION_SECRET |
 /**
  * Sign a JWT token with device fingerprint and user_id embedded
  */
-export async function signToken(fingerprint: string, userId: string): Promise<string> {
-    return new SignJWT({ fp: fingerprint, uid: userId })
+export async function signToken(fingerprint: string, userId: string, isAdmin = false): Promise<string> {
+    return new SignJWT({ fp: fingerprint, uid: userId, ...(isAdmin ? { is_admin: true } : {}) })
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt()
         .setExpirationTime('3650d') // ~10 years

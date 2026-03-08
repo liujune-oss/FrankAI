@@ -34,9 +34,9 @@ export const UPSERT_ACTIVITY_DECLARATION = {
             priority: { type: 'string', description: 'low, medium, high, or urgent. Default: medium.' },
             location: { type: 'string', description: 'Physical location or virtual link.' },
             id: { type: 'string', description: 'UUID of existing activity to update. Omit when creating new.' },
-            tags: { type: 'array', items: { type: 'string' }, description: 'Relevant semantic tags.' },
+            tags: { type: 'array', items: { type: 'string' }, description: 'Semantic tags you freely infer from the activity content. Always provide at least 1-3 tags. Examples: ["工作", "会议"], ["健身", "习惯"], ["项目A", "紧急"].' },
         },
-        required: ['title'],
+        required: ['title', 'tags'],
     },
 };
 

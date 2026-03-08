@@ -18,7 +18,7 @@ export async function POST(req: Request) {
 
         const { data: activationCode, error: codeError } = await supabaseAdmin
             .from('activation_codes')
-            .select('id, user_id, max_uses, usage_count, is_active, users!inner(is_active)')
+            .select('id, user_id, max_uses, usage_count, is_active, users!inner(is_active, is_admin)')
             .eq('code', upperCode)
             .maybeSingle();
 
@@ -69,7 +69,9 @@ export async function POST(req: Request) {
         }
 
         // 3. Issue Token
-        const token = await signToken(fingerprint, activationCode.user_id);
+        const userRecord = Array.isArray(activationCode.users) ? activationCode.users[0] : activationCode.users as any;
+        const isAdmin = userRecord?.is_admin === true;
+        const token = await signToken(fingerprint, activationCode.user_id, isAdmin);
         return Response.json({ token, user_id: activationCode.user_id });
 
     } catch (error: any) {

@@ -126,6 +126,20 @@ export function useConversations() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
 
+    // 拉云端并合并到本地，更新列表
+    const syncFromCloud = useCallback(async () => {
+        const localConvs = await getAllConversations();
+        setIsSyncing(true);
+        const mergedConvs = await mergeWithCloud(localConvs);
+        setIsSyncing(false);
+        setConversations(mergedConvs);
+    }, []);
+
+    // 抽屉打开时触发一次云端同步
+    useEffect(() => {
+        if (drawerOpen) syncFromCloud();
+    }, [drawerOpen, syncFromCloud]);
+
     // Initialization
     useEffect(() => {
         (async () => {

@@ -20,6 +20,8 @@ export default function CalendarPage() {
     const [selectedDate, setSelectedDate] = useState<Date>(startOfToday());
     const { activities, fetchActivities, isLoading, updateActivity } = useActivities();
 
+    const dateTapeRef = useRef<HTMLDivElement>(null);
+
     // Card-level voice note state
     const [cardRecordingId, setCardRecordingId] = useState<string | null>(null);
     const [cardProcessingId, setCardProcessingId] = useState<string | null>(null);
@@ -42,10 +44,20 @@ export default function CalendarPage() {
         if (auth.isActivated) fetchActivities();
     }, [auth.isActivated, fetchActivities]);
 
+    // 初始化时滚动到今天（每个日期格宽约 64px = 56 min-w + 8 gap）
+    useEffect(() => {
+        if (dateTapeRef.current) {
+            const itemWidth = 64;
+            dateTapeRef.current.scrollLeft = PAST_DAYS * itemWidth - dateTapeRef.current.clientWidth / 2 + itemWidth / 2;
+        }
+    }, []);
+
+    const PAST_DAYS = 30;
+    const FUTURE_DAYS = 60;
     const dateTape = useMemo(() => {
         const today = startOfToday();
-        const start = addDays(today, -1);
-        return Array.from({ length: 30 }).map((_, i) => addDays(start, i));
+        const start = addDays(today, -PAST_DAYS);
+        return Array.from({ length: PAST_DAYS + FUTURE_DAYS + 1 }).map((_, i) => addDays(start, i));
     }, []);
 
     const getActivityDate = (activity: Activity) => {
@@ -229,6 +241,7 @@ export default function CalendarPage() {
 
             {/* Date Scroll Tape */}
             <div
+                ref={dateTapeRef}
                 className="w-full overflow-x-auto border-b border-white/5 flex px-4 py-3 gap-2 hide-scrollbar"
                 onWheel={(e) => { if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY; }}
             >

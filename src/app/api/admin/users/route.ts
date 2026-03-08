@@ -101,6 +101,7 @@ export async function GET(req: NextRequest) {
         id,
         username,
         is_active,
+        is_admin,
         created_at,
         activation_codes (
           id,
@@ -136,15 +137,19 @@ export async function PATCH(req: NextRequest) {
     }
 
     try {
-        const { user_id, is_active } = await req.json();
+        const { user_id, is_active, is_admin } = await req.json();
 
-        if (!user_id || typeof is_active !== 'boolean') {
+        if (!user_id || (typeof is_active !== 'boolean' && typeof is_admin !== 'boolean')) {
             return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 });
         }
 
+        const updatePayload: Record<string, boolean> = {};
+        if (typeof is_active === 'boolean') updatePayload.is_active = is_active;
+        if (typeof is_admin === 'boolean') updatePayload.is_admin = is_admin;
+
         const { error } = await supabaseAdmin
             .from('users')
-            .update({ is_active })
+            .update(updatePayload)
             .eq('id', user_id);
 
         if (error) throw error;
