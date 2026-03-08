@@ -1,4 +1,4 @@
-import { RefObject, useRef, useEffect } from "react";
+import { RefObject, useRef, useEffect, useState } from "react";
 
 interface ChatModelOption {
     id: string;
@@ -20,6 +20,7 @@ interface InputBarProps {
     setPendingImages: React.Dispatch<React.SetStateAction<{ data: string; mimeType: string }[]>>;
     onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     fileInputRef: RefObject<HTMLInputElement | null>;
+    getAuthHeaders: () => Record<string, string>;
 }
 
 export default function InputBar({
@@ -36,14 +37,76 @@ export default function InputBar({
     setPendingImages,
     onImageUpload,
     fileInputRef,
+    getAuthHeaders,
 }: InputBarProps) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<BlobPart[]>([]);
+    const [isRecording, setIsRecording] = useState(false);
+    const [isTranscribing, setIsTranscribing] = useState(false);
 
     useEffect(() => {
         if (input === "" && textareaRef.current) {
             textareaRef.current.style.height = 'auto';
         }
     }, [input]);
+
+    const handleMicClick = async () => {
+        if (isTranscribing) return;
+
+        // 停止录音
+        if (isRecording && mediaRecorderRef.current) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = e => {
+                if (e.data.size > 0) audioChunksRef.current.push(e.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                stream.getTracks().forEach(t => t.stop());
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                setIsTranscribing(true);
+                try {
+                    const formData = new FormData();
+                    formData.append('audio', audioBlob, 'record.webm');
+                    const res = await fetch('/api/speech-to-text', {
+                        method: 'POST',
+                        headers: getAuthHeaders(),
+                        body: formData,
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.transcript) {
+                        setInput(data.transcript.trim());
+                        requestAnimationFrame(() => {
+                            if (textareaRef.current) {
+                                textareaRef.current.style.height = 'auto';
+                                textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
+                                textareaRef.current.focus();
+                            }
+                        });
+                    }
+                } catch (err) {
+                    console.error('STT error:', err);
+                } finally {
+                    setIsTranscribing(false);
+                }
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+        } catch {
+            alert('无法访问麦克风，请检查浏览器权限。');
+        }
+    };
 
     return (
         <div className="flex-none px-3 pt-2 pb-3 bg-background">
@@ -123,6 +186,26 @@ export default function InputBar({
                             disabled={isLoading}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
+                        </button>
+                        {/* Voice input button */}
+                        <button
+                            type="button"
+                            onClick={handleMicClick}
+                            disabled={isLoading || isTranscribing}
+                            title={isRecording ? '点击停止录音' : '语音输入'}
+                            className={`p-1.5 rounded-full transition-colors shrink-0 ${
+                                isRecording
+                                    ? 'text-red-500 bg-red-500/10 animate-pulse'
+                                    : isTranscribing
+                                        ? 'text-muted-foreground cursor-not-allowed'
+                                        : 'hover:bg-background/80 text-muted-foreground hover:text-foreground'
+                            }`}
+                        >
+                            {isTranscribing ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+                            ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                            )}
                         </button>
                         {/* Model selector badge */}
                         <select

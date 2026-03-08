@@ -217,6 +217,7 @@ export default function ChatPage() {
         setPendingImages={chat.setPendingImages}
         onImageUpload={chat.handleImageUpload}
         fileInputRef={chat.fileInputRef}
+        getAuthHeaders={auth.getAuthHeaders}
       />
 
       {/* Toast Notification */}
