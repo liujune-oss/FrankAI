@@ -21,15 +21,14 @@ export async function GET(req: NextRequest) {
 
     const since = req.nextUrl.searchParams.get("since");
 
+    // 优先尝试含 deleted_at 的查询（需要迁移已执行）
     let query = supabaseAdmin
         .from("conversations")
         .select("id, title, messages, created_at, updated_at, deleted_at")
         .eq("user_id", userId)
         .order("updated_at", { ascending: false });
 
-    if (since) {
-        query = query.gt("updated_at", since);
-    }
+    if (since) query = query.gt("updated_at", since);
 
     let { data, error } = await query;
 
@@ -64,7 +63,6 @@ export async function GET(req: NextRequest) {
 
 // POST: 写入/更新一条对话（upsert）
 // updated_at 由服务器生成，不信任客户端时钟
-// 响应返回服务器生成的 updatedAt（ms），客户端可更新本地记录
 export async function POST(req: NextRequest) {
     const userId = await getUserId(req);
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -76,7 +74,8 @@ export async function POST(req: NextRequest) {
 
     const now = new Date().toISOString();
 
-    const { error } = await supabaseAdmin.from("conversations").upsert(
+    // 先尝试含 deleted_at: null 的写法（迁移已执行时可清除墓碑）
+    let { error } = await supabaseAdmin.from("conversations").upsert(
         {
             id: conv.id,
             user_id: userId,
@@ -84,10 +83,25 @@ export async function POST(req: NextRequest) {
             messages: conv.messages ?? [],
             created_at: conv.createdAt ? new Date(conv.createdAt).toISOString() : now,
             updated_at: now,
-            deleted_at: null, // 写入时清除墓碑（防止重建同 ID 对话）
+            deleted_at: null,
         },
         { onConflict: "id" }
     );
+
+    // deleted_at 列不存在时降级（迁移未执行）
+    if (error && error.message?.includes("deleted_at")) {
+        ({ error } = await supabaseAdmin.from("conversations").upsert(
+            {
+                id: conv.id,
+                user_id: userId,
+                title: conv.title ?? "新会话",
+                messages: conv.messages ?? [],
+                created_at: conv.createdAt ? new Date(conv.createdAt).toISOString() : now,
+                updated_at: now,
+            },
+            { onConflict: "id" }
+        ));
+    }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, updatedAt: new Date(now).getTime() });
@@ -114,18 +128,23 @@ export async function DELETE(req: NextRequest) {
     const id = body?.id;
     if (!id) return NextResponse.json({ error: "Invalid" }, { status: 400 });
 
-    // 单条删除 → 写墓碑：清空内容只保留 id/user_id，设置 deleted_at
     const now = new Date().toISOString();
-    const { error } = await supabaseAdmin
+
+    // 先尝试写墓碑（迁移已执行）
+    let { error } = await supabaseAdmin
         .from("conversations")
-        .update({
-            deleted_at: now,
-            updated_at: now,
-            title: "",
-            messages: [],
-        })
+        .update({ deleted_at: now, updated_at: now, title: "", messages: [] })
         .eq("id", id)
         .eq("user_id", userId);
+
+    // deleted_at 列不存在时降级为真删
+    if (error && error.message?.includes("deleted_at")) {
+        ({ error } = await supabaseAdmin
+            .from("conversations")
+            .delete()
+            .eq("id", id)
+            .eq("user_id", userId));
+    }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
