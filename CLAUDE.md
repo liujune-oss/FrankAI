@@ -99,3 +99,6 @@
 | `docs/changelog.md` | 版本发布记录 |
 | `scripts/test-chat-flow.mjs` | 工具调用循环本地单元测试 |
 | `supabase/memory_v2_migration.sql` | 记忆架构 v2 迁移 SQL |
+
+## 其他
+所有回复用中文
