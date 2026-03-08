@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import ConversationDrawer from "@/components/ConversationDrawer";
 import { getAllConversations, getActiveConversationId, setActiveConversationId, Conversation } from "@/lib/conversations";
-import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, FileText, Loader2, Copy, X as XIcon, AlertTriangle } from "lucide-react";
+import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, FileText, Loader2, Copy, X as XIcon, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 import { useActivities, Activity } from "@/hooks/useActivities";
 
 export default function TasksPage() {
@@ -34,6 +34,8 @@ export default function TasksPage() {
     // Voice timing log overlay
     const [voiceLog, setVoiceLog] = useState<string | null>(null);
     const [logCopied, setLogCopied] = useState(false);
+
+    const [showCompleted, setShowCompleted] = useState(false);
 
     // Card-level voice note state
     const [cardRecordingId, setCardRecordingId] = useState<string | null>(null);
@@ -428,11 +430,13 @@ export default function TasksPage() {
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {isLoading ? (
                     <div className="text-center text-sm text-zinc-500 py-10">加载中...</div>
-                ) : activities.filter(a => filter === 'all' || a.type === filter).length === 0 ? (
-                    <div className="text-center text-sm text-zinc-500 py-10">暂无{filter === 'all' ? '待办事项' : filter === 'task' ? '待办事项' : filter === 'event' ? '日程安排' : '随手记录'}</div>
-                ) : (
-                    activities.filter(a => filter === 'all' || a.type === filter).map((activity) => {
-                        const isCompleted = activity.status === 'completed';
+                ) : (() => {
+                    const filtered = activities.filter(a => filter === 'all' || a.type === filter);
+                    const activeItems = filtered.filter(a => a.status !== 'completed' && a.status !== 'cancelled');
+                    const completedItems = filtered.filter(a => a.status === 'completed' || a.status === 'cancelled');
+
+                    const renderCard = (activity: Activity) => {
+                        const isCompleted = activity.status === 'completed' || activity.status === 'cancelled';
                         const refTime = activity.end_time || activity.start_time;
                         const overdue = !isCompleted && activity.type !== 'log' && !!refTime && new Date(refTime) < new Date();
 
@@ -498,8 +502,37 @@ export default function TasksPage() {
                                 </button>
                             </div>
                         );
-                    })
-                )}
+                    };
+
+                    if (filtered.length === 0) return (
+                        <div className="text-center text-sm text-zinc-500 py-10">暂无{filter === 'all' ? '待办事项' : filter === 'task' ? '待办事项' : filter === 'event' ? '日程安排' : '随手记录'}</div>
+                    );
+
+                    return (
+                        <>
+                            {activeItems.length === 0 && completedItems.length > 0 && (
+                                <div className="text-center text-sm text-zinc-600 py-4">所有事项已完成</div>
+                            )}
+                            {activeItems.map(renderCard)}
+                            {completedItems.length > 0 && (
+                                <div className="pt-2">
+                                    <button
+                                        onClick={() => setShowCompleted(v => !v)}
+                                        className="flex items-center gap-1.5 text-[13px] font-medium text-zinc-500 hover:text-zinc-300 transition-colors mb-3"
+                                    >
+                                        {showCompleted ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                                        已完成 ({completedItems.length})
+                                    </button>
+                                    {showCompleted && (
+                                        <div className="space-y-3">
+                                            {completedItems.map(renderCard)}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
             </div>
 
             {/* Live transcript bubble */}
