@@ -105,10 +105,17 @@ async function mergeWithCloud(localConvs: Conversation[]): Promise<Conversation[
         }
     }
 
-    // 本地独有 → 推送到云端
+    const GRACE_MS = 10 * 60 * 1000; // 10 分钟宽限期
     for (const localConv of localConvs) {
         if (!cloudMap.has(localConv.id)) {
-            syncConvToCloud(localConv);
+            if (Date.now() - localConv.updatedAt > GRACE_MS) {
+                // 超过宽限期且云端不存在 → 视为其他设备已删除，本地同步删除
+                await deleteConversation(localConv.id);
+                localMap.delete(localConv.id);
+            } else {
+                // 宽限期内 → 视为本地新建未同步，推回云端
+                syncConvToCloud(localConv);
+            }
         }
     }
 
