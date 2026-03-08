@@ -23,7 +23,7 @@ interface ConversationDrawerProps {
     pushSystemInstruction: (value: string) => Promise<void>;
     isAdmin: boolean;
     onOpenSandbox: () => void;
-    onClearCloud: () => void;
+    onClearCloud?: () => void;
 }
 
 const NAV_ITEMS = [
@@ -170,7 +170,7 @@ export default function ConversationDrawer({
                                 <div className="flex items-center gap-1 px-3 py-2">
                                     <span className="text-xs text-red-400 flex-1">确认清空云端？</span>
                                     <button
-                                        onClick={() => { onClearCloud(); setPendingClearCloud(false); }}
+                                        onClick={() => { onClearCloud?.(); setPendingClearCloud(false); }}
                                         className="text-[11px] font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-400"
                                     >确认</button>
                                     <button

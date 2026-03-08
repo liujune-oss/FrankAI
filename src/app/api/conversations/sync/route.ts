@@ -30,19 +30,19 @@ export async function GET(req: NextRequest) {
 
     if (since) query = query.gt("updated_at", since);
 
-    let { data, error } = await query;
+    let result = await query;
 
     // deleted_at 列不存在时（迁移未执行），降级为不含墓碑字段的查询
-    if (error && error.message?.includes("deleted_at")) {
+    if (result.error && result.error.message?.includes("deleted_at")) {
         const fallback = supabaseAdmin
             .from("conversations")
             .select("id, title, messages, created_at, updated_at")
             .eq("user_id", userId)
             .order("updated_at", { ascending: false });
-        const result = since ? await fallback.gt("updated_at", since) : await fallback;
-        data = result.data;
-        error = result.error;
+        result = (since ? await fallback.gt("updated_at", since) : await fallback) as typeof result;
     }
+
+    const { data, error } = result;
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
