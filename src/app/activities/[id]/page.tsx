@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Activity } from "@/hooks/useActivities";
-import { ArrowLeft, Pencil, Check, X, Trash2, Loader2, MapPin, Tag, Calendar, AlignLeft } from "lucide-react";
+import { ArrowLeft, Pencil, Check, X, Trash2, Loader2, MapPin, Tag, Calendar, AlignLeft, Mic } from "lucide-react";
 
 const TYPE_OPTIONS = [
     { value: 'task',      label: '待办',   color: 'text-emerald-400', bg: 'bg-emerald-500/15' },
@@ -68,6 +68,9 @@ export default function ActivityDetailPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [draft, setDraft] = useState<Partial<Activity>>({});
+    const [isRecording, setIsRecording] = useState(false);
+    const [isTranscribing, setIsTranscribing] = useState(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
     useEffect(() => {
         if (!auth.isActivated) return;
@@ -115,6 +118,69 @@ export default function ActivityDetailPage() {
         if (res.ok) {
             setActivity(data.activity);
             patchCache(id, data.activity);
+        }
+    };
+
+    const handleMicToggle = async () => {
+        if (isTranscribing) return;
+
+        if (isRecording) {
+            mediaRecorderRef.current?.stop();
+            setIsRecording(false);
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            const chunks: BlobPart[] = [];
+
+            mediaRecorder.ondataavailable = (ev) => { if (ev.data.size > 0) chunks.push(ev.data); };
+            mediaRecorder.onstop = async () => {
+                stream.getTracks().forEach(t => t.stop());
+                const blob = new Blob(chunks, { type: 'audio/webm' });
+                if (blob.size < 4000) return;
+                setIsTranscribing(true);
+                try {
+                    const formData = new FormData();
+                    formData.append('audio', blob, 'note.webm');
+                    const sttRes = await fetch('/api/speech-to-text', {
+                        method: 'POST',
+                        headers: {
+                            'x-activation-token': auth.getAuthHeaders()['x-activation-token'],
+                            'x-device-fingerprint': auth.getAuthHeaders()['x-device-fingerprint'],
+                        },
+                        body: formData,
+                    });
+                    const { transcript } = await sttRes.json();
+                    if (!transcript?.trim()) return;
+                    const now = new Date().toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const newDesc = activity?.description
+                        ? `${activity.description}\n\n[${now}] ${transcript.trim()}`
+                        : `[${now}] ${transcript.trim()}`;
+                    const res = await fetch('/api/activities', {
+                        method: 'PUT',
+                        headers: { ...auth.getAuthHeaders(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id, description: newDesc }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        setActivity(data.activity);
+                        setDraft(data.activity);
+                        patchCache(id, data.activity);
+                    }
+                } catch (err: any) {
+                    alert('语音备注失败：' + err.message);
+                } finally {
+                    setIsTranscribing(false);
+                }
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+        } catch (err: any) {
+            alert('无法访问麦克风：' + err.message);
         }
     };
 
@@ -184,6 +250,15 @@ export default function ActivityDetailPage() {
                             className="p-1.5 rounded-lg hover:bg-red-500/10 text-zinc-500 hover:text-red-400 transition-colors"
                         >
                             <Trash2 size={18} />
+                        </button>
+                        <button
+                            onClick={handleMicToggle}
+                            disabled={isTranscribing}
+                            className={`p-1.5 rounded-lg transition-colors ${isRecording ? 'text-red-400 animate-pulse' : 'text-zinc-400 hover:text-blue-400 hover:bg-blue-500/10'}`}
+                        >
+                            {isTranscribing
+                                ? <Loader2 size={18} className="animate-spin" />
+                                : <Mic size={18} />}
                         </button>
                         <button
                             onClick={() => setIsEditing(true)}
