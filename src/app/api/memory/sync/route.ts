@@ -75,13 +75,19 @@ export async function POST(req: NextRequest) {
         });
         const embedding = embedResult.embeddings?.[0]?.values ?? [];
 
-        // 5. 追加写入 memories_chunks（不删除旧数据）
+        // 5. 覆盖写入：先删除该会话的旧摘要，再插入新记录
+        await supabaseAdmin
+            .from('memories_chunks')
+            .delete()
+            .eq('user_id', authPayload.uid)
+            .eq('session_id', session_id);
+
         const { error: chunkError } = await supabaseAdmin
             .from('memories_chunks')
             .insert([{
                 user_id: authPayload.uid,
                 session_id,
-                chunk_index,
+                chunk_index: 0,
                 summary_text: summaryText,
                 embedding,
                 message_count: messages.length,

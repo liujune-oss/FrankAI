@@ -35,6 +35,8 @@ export function useMemories() {
     }, [getAuthHeaders]);
 
     const deleteMemory = useCallback(async (id: string) => {
+        // 乐观更新：先从 UI 移除，失败再回滚
+        setMemories((prev) => prev.filter((m) => m.id !== id));
         try {
             const res = await fetch('/api/memories', {
                 method: 'DELETE',
@@ -45,18 +47,19 @@ export function useMemories() {
                 body: JSON.stringify({ id }),
             });
             const data = await res.json();
-            if (data.success) {
-                setMemories((prev) => prev.filter((m) => m.id !== id));
-                return true;
-            } else {
+            if (!data.success) {
                 setError(data.error || '删除记忆失败');
+                // 回滚
+                fetchMemories();
                 return false;
             }
+            return true;
         } catch (err: any) {
             setError(err.message || '网络错误，删除记忆失败');
+            fetchMemories();
             return false;
         }
-    }, [getAuthHeaders]);
+    }, [getAuthHeaders, fetchMemories]);
 
     const clearAllMemories = useCallback(async () => {
         try {
