@@ -25,10 +25,10 @@ export function useMemories() {
             if (data.success) {
                 setMemories(data.memories || []);
             } else {
-                setError(data.error || 'Failed to fetch memories');
+                setError(data.error || '加载记忆失败');
             }
         } catch (err: any) {
-            setError(err.message || 'Network error fetching memories');
+            setError(err.message || '网络错误，加载记忆失败');
         } finally {
             setIsLoading(false);
         }
@@ -49,11 +49,11 @@ export function useMemories() {
                 setMemories((prev) => prev.filter((m) => m.id !== id));
                 return true;
             } else {
-                setError(data.error || 'Failed to delete memory');
+                setError(data.error || '删除记忆失败');
                 return false;
             }
         } catch (err: any) {
-            setError(err.message || 'Network error deleting memory');
+            setError(err.message || '网络错误，删除记忆失败');
             return false;
         }
     }, [getAuthHeaders]);
@@ -73,11 +73,11 @@ export function useMemories() {
                 setMemories([]);
                 return true;
             } else {
-                setError(data.error || 'Failed to clear memories');
+                setError(data.error || '清空记忆失败');
                 return false;
             }
         } catch (err: any) {
-            setError(err.message || 'Network error clearing memories');
+            setError(err.message || '网络错误，清空记忆失败');
             return false;
         }
     }, [getAuthHeaders]);
@@ -99,11 +99,11 @@ export function useMemories() {
                 );
                 return true;
             } else {
-                setError(data.error || 'Failed to update memory');
+                setError(data.error || '更新记忆失败');
                 return false;
             }
         } catch (err: any) {
-            setError(err.message || 'Network error updating memory');
+            setError(err.message || '网络错误，更新记忆失败');
             return false;
         }
     }, [getAuthHeaders]);

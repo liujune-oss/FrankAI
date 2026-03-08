@@ -154,12 +154,12 @@ export default function MemoryManager({ open, onClose }: MemoryManagerProps) {
                                                     className="px-4 py-1.5 text-sm bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
                                                 >
                                                     {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                                    重新向量化并保存
+                                                    保存
                                                 </button>
                                             </div>
                                             <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
                                                 <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                                                修改文本后将调用模型重新生成嵌入向量，这可能会消耗少量 Token。
+                                                修改后将重新生成记忆向量，会消耗少量模型配额。
                                             </p>
                                         </div>
                                     ) : (
