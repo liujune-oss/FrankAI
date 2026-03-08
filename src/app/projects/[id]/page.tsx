@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjects, Project, PROJECT_COLORS, STATUS_LABELS } from "@/hooks/useProjects";
 import { Activity } from "@/hooks/useActivities";
-import { ArrowLeft, Plus, Trash2, CheckSquare, Square, Loader2, Pencil, Check, X, Mic, Copy, X as XIcon, Flag, CalendarDays, ListTodo, Bell } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, CheckSquare, Square, Loader2, Pencil, Check, X, Mic, Copy, X as XIcon, Flag, CalendarDays, ListTodo, Bell, LayoutList, Clock } from "lucide-react";
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string; border: string }> = {
     milestone: { label: '里程碑', icon: <Flag size={14} />, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
@@ -14,6 +14,51 @@ const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color:
     reminder:  { label: '提醒',   icon: <Bell size={14} />, color: 'text-pink-400', bg: 'bg-pink-500/10', border: 'border-pink-500/20' },
 };
 const TYPE_ORDER = ['milestone', 'event', 'task', 'reminder'];
+
+function ActivityCard({ a, showTypeBadge, onToggle, onDelete }: {
+    a: Activity;
+    showTypeBadge?: boolean;
+    onToggle: (a: Activity) => void;
+    onDelete: (id: string) => void;
+}) {
+    const cfg = TYPE_CONFIG[a.type] ?? TYPE_CONFIG.task;
+    const isMilestone = a.type === 'milestone';
+    return (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${a.status === 'completed' ? 'bg-zinc-500/10 border-white/5 opacity-50' : `${cfg.bg} ${cfg.border}`}`}>
+            {isMilestone ? (
+                <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+                    <div className={`w-2.5 h-2.5 rotate-45 ${a.status === 'completed' ? 'bg-zinc-500' : 'bg-amber-400'}`} />
+                </div>
+            ) : (
+                <button onClick={() => onToggle(a)} className="flex-shrink-0">
+                    {a.status === 'completed'
+                        ? <CheckSquare size={18} className={cfg.color} />
+                        : <Square size={18} className={`${cfg.color} opacity-50`} />}
+                </button>
+            )}
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-[14px] font-medium ${a.status === 'completed' ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
+                        {a.title}
+                    </span>
+                    {showTypeBadge && (
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${cfg.bg} ${cfg.color}`}>
+                            {cfg.label}
+                        </span>
+                    )}
+                </div>
+                {(a.start_time || a.end_time) && (
+                    <p className="text-[11px] text-zinc-500 mt-0.5">
+                        {new Date(a.start_time || a.end_time!).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                )}
+            </div>
+            <button onClick={() => onDelete(a.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors flex-shrink-0">
+                <Trash2 size={15} />
+            </button>
+        </div>
+    );
+}
 
 export default function ProjectDetailPage() {
     const params = useParams();
@@ -39,6 +84,9 @@ export default function ProjectDetailPage() {
 
     // Delete dialog
     const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
+
+    // View mode
+    const [viewMode, setViewMode] = useState<'grouped' | 'timeline'>('grouped');
 
     // Voice recording
     const [isRecording, setIsRecording] = useState(false);
@@ -213,6 +261,14 @@ export default function ProjectDetailPage() {
                         </button>
                     )}
                 </div>
+                {/* View mode toggle */}
+                <button
+                    onClick={() => setViewMode(v => v === 'grouped' ? 'timeline' : 'grouped')}
+                    className="p-1.5 rounded-lg hover:bg-muted transition-colors flex-shrink-0 text-zinc-400 hover:text-zinc-200"
+                    title={viewMode === 'grouped' ? '切换为时间线' : '切换为分组'}
+                >
+                    {viewMode === 'grouped' ? <Clock size={18} /> : <LayoutList size={18} />}
+                </button>
             </header>
 
             {/* Project meta */}
@@ -242,65 +298,47 @@ export default function ProjectDetailPage() {
                 </div>
             </div>
 
-            {/* Grouped activity list */}
+            {/* Activity list */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
                 {activities.length === 0 && (
                     <p className="text-center text-sm text-zinc-500 py-8">按下麦克风，用语音添加里程碑、会议、待办或提醒</p>
                 )}
 
-                {TYPE_ORDER.map(typeKey => {
-                    const group = activities.filter(a => a.type === typeKey);
-                    if (group.length === 0) return null;
-                    const cfg = TYPE_CONFIG[typeKey] ?? TYPE_CONFIG.task;
-                    return (
-                        <div key={typeKey}>
-                            <div className={`flex items-center gap-1.5 text-xs font-semibold mb-2 ${cfg.color}`}>
-                                {cfg.icon}<span>{cfg.label}</span>
-                            </div>
-                            <div className="space-y-2">
-                                {group.map(a => (
-                                    <div key={a.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${a.status === 'completed' ? 'bg-zinc-500/10 border-white/5 opacity-50' : `${cfg.bg} ${cfg.border}`}`}>
-                                        {typeKey === 'milestone' ? (
-                                            <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
-                                                <div className={`w-2.5 h-2.5 rotate-45 ${a.status === 'completed' ? 'bg-zinc-500' : 'bg-amber-400'}`} />
-                                            </div>
-                                        ) : (
-                                            <button onClick={() => handleToggle(a)} className="flex-shrink-0">
-                                                {a.status === 'completed'
-                                                    ? <CheckSquare size={18} className={cfg.color} />
-                                                    : <Square size={18} className={`${cfg.color} opacity-50`} />}
-                                            </button>
-                                        )}
-                                        <div className="flex-1 min-w-0">
-                                            <span className={`text-[14px] font-medium ${a.status === 'completed' ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
-                                                {a.title}
-                                            </span>
-                                            {(a.start_time || a.end_time) && (
-                                                <p className="text-[11px] text-zinc-500 mt-0.5">
-                                                    {new Date(a.start_time || a.end_time!).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <button onClick={() => setDeleteItemId(a.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors flex-shrink-0">
-                                            <Trash2 size={15} />
-                                        </button>
+                {viewMode === 'grouped' ? (
+                    // ── Grouped view ──────────────────────────────────────────
+                    <>
+                        {TYPE_ORDER.map(typeKey => {
+                            const group = activities.filter(a => a.type === typeKey);
+                            if (group.length === 0) return null;
+                            const cfg = TYPE_CONFIG[typeKey] ?? TYPE_CONFIG.task;
+                            return (
+                                <div key={typeKey}>
+                                    <div className={`flex items-center gap-1.5 text-xs font-semibold mb-2 ${cfg.color}`}>
+                                        {cfg.icon}<span>{cfg.label}</span>
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-                    );
-                })}
-
-                {/* Unknown types fallback */}
-                {activities.filter(a => !TYPE_ORDER.includes(a.type)).map(a => (
-                    <div key={a.id} className="flex items-center gap-3 px-4 py-3 rounded-xl border bg-zinc-900 border-white/5">
-                        <Square size={18} className="text-zinc-500 flex-shrink-0" />
-                        <span className="flex-1 text-[14px] text-zinc-100">{a.title}</span>
-                        <button onClick={() => setDeleteItemId(a.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors">
-                            <Trash2 size={15} />
-                        </button>
+                                    <div className="space-y-2">
+                                        {group.map(a => <ActivityCard key={a.id} a={a} onToggle={handleToggle} onDelete={id => setDeleteItemId(id)} />)}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {activities.filter(a => !TYPE_ORDER.includes(a.type)).map(a => (
+                            <ActivityCard key={a.id} a={a} onToggle={handleToggle} onDelete={id => setDeleteItemId(id)} />
+                        ))}
+                    </>
+                ) : (
+                    // ── Timeline view ─────────────────────────────────────────
+                    <div className="space-y-2">
+                        {[...activities]
+                            .sort((a, b) => {
+                                const ta = new Date(a.start_time || a.end_time || a.created_at).getTime();
+                                const tb = new Date(b.start_time || b.end_time || b.created_at).getTime();
+                                return ta - tb;
+                            })
+                            .map(a => <ActivityCard key={a.id} a={a} showTypeBadge onToggle={handleToggle} onDelete={id => setDeleteItemId(id)} />)
+                        }
                     </div>
-                ))}
+                )}
             </div>
 
             {/* Bottom FABs: mic (center) + manual add (right) */}

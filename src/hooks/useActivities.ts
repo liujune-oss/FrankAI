@@ -7,7 +7,7 @@ export interface Activity {
     id: string;
     title: string;
     description?: string;
-    type: 'task' | 'event' | 'reminder' | 'log';
+    type: 'task' | 'event' | 'reminder' | 'log' | 'milestone';
     status: 'needs_action' | 'in_process' | 'completed' | 'cancelled';
     priority: 'low' | 'medium' | 'high' | 'urgent';
     start_time?: string;
