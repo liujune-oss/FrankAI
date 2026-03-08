@@ -59,7 +59,9 @@ export async function POST(req: NextRequest) {
             `Extract the CONTENT (the actual thing being created) as the title, strip the instruction prefix entirely. ` +
             `e.g. "添加里程碑，6月1日开始全员实行新规定" → title="全员实行新规定", type=milestone, start_time=2026-06-01. ` +
             `e.g. "添加里程碑完成登录页" → title="完成登录页", type=milestone. ` +
-            `e.g. "创建会议，明天下午三点需求评审" → title="需求评审", type=event.` +
+            `e.g. "创建会议，明天下午三点需求评审" → title="需求评审", type=event. ` +
+            `e.g. "添加随手记，今天心情不错" → title="今天心情不错", type=log. ` +
+            `e.g. "记录一下，完成了用户调研" → title="完成了用户调研", type=log.` +
             projectContext;
 
         const stream = genai.models.generateContentStream({
