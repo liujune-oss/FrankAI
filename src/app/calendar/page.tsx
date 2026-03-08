@@ -49,12 +49,15 @@ export default function CalendarPage() {
 
     // 初始化时滚动到今天（56px宽 + 8px gap = 64px/格，容器左padding=16px）
     useEffect(() => {
-        if (dateTapeRef.current) {
+        const el = dateTapeRef.current;
+        if (!el) return;
+        const scroll = () => {
             const itemWidth = 64;
             const leftPadding = 16;
-            const containerWidth = dateTapeRef.current.clientWidth;
-            dateTapeRef.current.scrollLeft = leftPadding + PAST_DAYS * itemWidth + 56 / 2 - containerWidth / 2;
-        }
+            el.scrollLeft = leftPadding + PAST_DAYS * itemWidth + 56 / 2 - el.clientWidth / 2;
+        };
+        // 延迟一帧确保容器已完成布局，clientWidth 有效
+        requestAnimationFrame(scroll);
     }, []);
     const dateTape = useMemo(() => {
         const today = startOfToday();

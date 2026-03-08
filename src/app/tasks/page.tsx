@@ -615,7 +615,7 @@ export default function TasksPage() {
             {/* FAB */}
             <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
                 <button
-                    onClick={sttMode === 'deepgram' ? toggleDeepgramRecording : sttMode === 'local' ? toggleLocalRecording : toggleRecording}
+                    onClick={isAdmin ? (sttMode === 'deepgram' ? toggleDeepgramRecording : sttMode === 'local' ? toggleLocalRecording : toggleRecording) : toggleRecording}
                     disabled={isProcessingVoice}
                     className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${isRecording ? 'bg-red-500 scale-110 animate-pulse' : 'bg-zinc-50 hover:scale-105 active:scale-95'} ${isProcessingVoice ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
@@ -625,12 +625,18 @@ export default function TasksPage() {
                         <Mic size={24} className={isRecording ? 'text-white' : 'text-zinc-950'} />
                     )}
                 </button>
-                <button
-                    onClick={() => setSttMode(m => m === 'deepgram' ? 'local' : m === 'local' ? 'server' : 'deepgram')}
-                    className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
-                >
-                    {sttMode === 'deepgram' ? '流式' : sttMode === 'local' ? '本地' : '云端'}
-                </button>
+                {isAdmin ? (
+                    <button
+                        onClick={() => setSttMode(m => m === 'deepgram' ? 'local' : m === 'local' ? 'server' : 'deepgram')}
+                        className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                    >
+                        {sttMode === 'deepgram' ? '流式' : sttMode === 'local' ? '本地' : '云端'}
+                    </button>
+                ) : (
+                    <span className="text-[10px] text-zinc-500">
+                        {isRecording ? '再次点击停止' : '点击说话'}
+                    </span>
+                )}
             </div>
 
             {/* Voice Timing Log Overlay */}
