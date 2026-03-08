@@ -188,6 +188,7 @@ export default function CalendarPage() {
             else if (a.type === 'event') colors.add('bg-blue-500');
             else if (a.type === 'reminder') colors.add('bg-pink-500');
             else if (a.type === 'log') colors.add('bg-purple-500');
+            else if (a.type === 'milestone') colors.add('bg-amber-500');
         });
         return Array.from(colors);
     };
@@ -286,6 +287,7 @@ export default function CalendarPage() {
                             else if (activity.type === 'event') { bgClass = "bg-blue-500/10 border-blue-500/20 border-l-blue-500"; textClass = "text-blue-100"; subtitleClass = "text-blue-400/80"; }
                             else if (activity.type === 'reminder') { bgClass = "bg-pink-500/10 border-pink-500/20 border-l-pink-500"; textClass = "text-pink-100"; subtitleClass = "text-pink-400/80"; }
                             else if (activity.type === 'log') { bgClass = "bg-purple-500/10 border-purple-500/20 border-l-purple-500"; textClass = "text-purple-100"; subtitleClass = "text-purple-400/80"; }
+                            else if (activity.type === 'milestone') { bgClass = "bg-amber-500/10 border-amber-500/20 border-l-amber-500"; textClass = "text-amber-100"; subtitleClass = "text-amber-400/80"; }
 
                             const actDate = getActivityDate(activity);
 
@@ -324,6 +326,7 @@ export default function CalendarPage() {
                                             {activity.type === 'event' && activity.start_time && activity.end_time ? `${format(parseISO(activity.start_time), 'HH:mm')} - ${format(parseISO(activity.end_time), 'HH:mm')}` : ''}
                                             {activity.type === 'reminder' ? '提醒' : ''}
                                             {activity.type === 'log' ? '随手记' : ''}
+                                            {activity.type === 'milestone' ? '里程碑' : ''}
                                         </span>
                                     </div>
 

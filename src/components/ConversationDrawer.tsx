@@ -26,8 +26,8 @@ interface ConversationDrawerProps {
 }
 
 const NAV_ITEMS = [
-    { href: "/tasks",    icon: <CheckSquare size={22} />,   label: "待办",  activeColor: "text-emerald-400 bg-emerald-500/15" },
-    { href: "/calendar", icon: <Calendar size={22} />,      label: "日程",  activeColor: "text-blue-400 bg-blue-500/15" },
+    { href: "/tasks",    icon: <CheckSquare size={22} />,   label: "活动",  activeColor: "text-emerald-400 bg-emerald-500/15" },
+    { href: "/calendar", icon: <Calendar size={22} />,      label: "日历",  activeColor: "text-blue-400 bg-blue-500/15" },
     { href: "/projects", icon: <FolderKanban size={22} />,  label: "项目",  activeColor: "text-indigo-400 bg-indigo-500/15" },
 ];
 
