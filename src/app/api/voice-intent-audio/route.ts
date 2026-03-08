@@ -40,15 +40,21 @@ export async function POST(req: NextRequest) {
         const now = new Date();
         const localTime = new Date(now.getTime() + 8 * 3600000).toISOString().replace('Z', '+08:00');
         const projectContext = projectId
-            ? ` This is in a project context (project_id: ${projectId}). ` +
-              `Use type=milestone for key dates/achievements, type=event for meetings, type=task for todos, type=reminder for reminders.`
+            ? ` This is in a project context (project_id: ${projectId}).`
             : '';
         const systemInstruction =
             `Current UTC time: ${now.toISOString()} (Shanghai local: ${localTime}). ` +
             `First, accurately transcribe every word in the audio as-is (output the full transcript text). ` +
-            `Then, based on the transcript, call the appropriate tool: ` +
-            `upsert_project if the user wants to create/update a project, ` +
-            `upsert_activity for tasks, events, milestones, reminders, or logs.` +
+            `Then call the appropriate tool based on these STRICT rules:\n` +
+            `1. If user says "项目" → upsert_project\n` +
+            `2. EXPLICIT TYPE KEYWORDS (highest priority — must follow exactly):\n` +
+            `   - "里程碑" → type=milestone\n` +
+            `   - "会议"/"开会"/"meeting" → type=event\n` +
+            `   - "待办"/"任务"/"todo" → type=task\n` +
+            `   - "提醒"/"reminder" → type=reminder\n` +
+            `   - "随手记"/"记录"/"log" → type=log\n` +
+            `3. If no explicit keyword, infer from context (scheduled time+place → event, deadline → task, alert → reminder).\n` +
+            `When the user explicitly states a type keyword, NEVER override it with a different type.` +
             projectContext;
 
         const stream = genai.models.generateContentStream({
