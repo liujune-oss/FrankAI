@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Conversation } from "@/lib/conversations";
 import versionData from "../../version.json";
-import { Beaker, CheckSquare, Calendar, MessageSquare, FolderKanban, Settings, RefreshCw, ChevronDown } from "lucide-react";
+import { Beaker, CheckSquare, Calendar, MessageSquare, FolderKanban, Settings, RefreshCw, ChevronDown, BrainCircuit } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -33,6 +33,7 @@ export default function ConversationDrawer({
     onNew,
     onSwitch,
     onDelete,
+    onOpenMemoryManager,
     isAdmin,
     onOpenSandbox,
 }: ConversationDrawerProps) {
@@ -143,6 +144,14 @@ export default function ConversationDrawer({
 
                     {showSettings && (
                         <div className="px-3 pb-3 space-y-1">
+                                <button
+                                onClick={() => { onClose(); onOpenMemoryManager(); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-400 hover:text-blue-300 rounded-lg hover:bg-blue-500/10 transition-colors"
+                            >
+                                <BrainCircuit size={13} />
+                                记忆管理
+                            </button>
+
                             <button
                                 onClick={() => {
                                     if ('serviceWorker' in navigator) {
