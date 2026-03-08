@@ -45,7 +45,10 @@ export async function POST(req: NextRequest) {
             `   - "提醒"/"reminder" → type=reminder\n` +
             `   - "随手记"/"记录"/"log" → type=log\n` +
             `3. If no explicit keyword, infer from context (scheduled time+place → event, deadline → task, alert → reminder).\n` +
-            `When the user explicitly states a type keyword, NEVER override it with a different type. No reply text needed.` +
+            `When the user explicitly states a type keyword, NEVER override it with a different type.\n` +
+            `IMPORTANT: Strip the type keyword and action verbs ("添加","创建","新建","设置","加一个") from the title. ` +
+            `e.g. "添加里程碑完成登录页" → title="完成登录页", type=milestone. ` +
+            `e.g. "创建会议需求评审" → title="需求评审", type=event. No reply text needed.` +
             projectContext;
 
         const stream = genai.models.generateContentStream({
