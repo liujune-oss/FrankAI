@@ -51,13 +51,13 @@ export async function POST(req: NextRequest) {
         const embeddingModelName = configs.memory_embedding_model || 'gemini-embedding-001';
 
         const conversationText = messagesData
-            .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+            .map(m => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`)
             .join('\n');
 
-        const summaryPrompt = `Analyze the following conversation and extract the user's core preferences, facts, actions, ` +
-            `and important context useful for an AI to remember in future conversations. ` +
-            `Provide a highly condensed paragraph. Do not include pleasantries.\n\n` +
-            `Conversation:\n${conversationText}`;
+        const summaryPrompt = `分析以下对话，提取用户的核心偏好、事实、行为和重要背景，` +
+            `这些信息将用于AI在未来对话中记忆。` +
+            `输出一段高度凝练的摘要，不要包含客套话，使用简体中文。\n\n` +
+            `对话内容：\n${conversationText}`;
         const summaryResult = await genai.models.generateContent({
             model: summaryModelName,
             contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }],

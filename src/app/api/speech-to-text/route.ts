@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
                     role: 'user',
                     parts: [
                         { inlineData: { data: base64Data, mimeType } },
-                        { text: "Please transcribe the following audio directly. Just output the transcript in Chinese if it is spoken in Chinese, without any additional conversational padding, markdown, or greetings. If you cannot hear anything, just say '[null]'." }
+                        { text: "请直接转写以下音频。如果是中文，直接输出中文转写文本，字与字之间不要加空格，保持正常中文排版。不要添加任何解释、问候语或markdown格式。如果听不到任何内容，只输出 '[null]'。" }
                     ]
                 }
             ]
