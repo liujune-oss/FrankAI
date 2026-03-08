@@ -25,8 +25,22 @@ export async function GET(req: Request) {
         const status = searchParams.get('status');
         const startDate = searchParams.get('start');
         const endDate = searchParams.get('end');
+        const singleId = searchParams.get('id');
 
         const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+        // Single activity fetch
+        if (singleId) {
+            const { data, error } = await supabase
+                .from('activities')
+                .select('*')
+                .eq('id', singleId)
+                .eq('user_id', userId)
+                .single();
+            if (error) throw error;
+            return NextResponse.json({ activity: data });
+        }
+
         let query = supabase
             .from('activities')
             .select('*')

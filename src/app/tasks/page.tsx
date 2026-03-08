@@ -408,12 +408,12 @@ export default function TasksPage() {
                         }
 
                         return (
-                            <div key={activity.id} className={`w-full flex items-center p-4 gap-3 rounded-xl border ${bgClass}`}>
+                            <div key={activity.id} onClick={() => router.push(`/activities/${activity.id}`)} className={`w-full flex items-center p-4 gap-3 rounded-xl border cursor-pointer ${bgClass}`}>
                                 <div className="flex-shrink-0">
                                     {activity.type === 'log' ? (
                                         <div className="w-5 h-5 flex items-center justify-center pt-0.5"><FileText size={18} className="text-purple-500/50" /></div>
                                     ) : (
-                                        <button onClick={() => handleToggleStatus(activity)} className="flex items-center justify-center">
+                                        <button onClick={e => { e.stopPropagation(); handleToggleStatus(activity); }} className="flex items-center justify-center">
                                             {isCompleted ? (
                                                 <CheckSquare size={20} className="text-emerald-500" />
                                             ) : (

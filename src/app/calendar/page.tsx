@@ -201,7 +201,10 @@ export default function CalendarPage() {
                                     <div className="text-[13px] font-medium text-zinc-500 pt-1 w-12 text-right flex-shrink-0">
                                         {format(actDate, 'HH:mm')}
                                     </div>
-                                    <div className={`flex-1 border-l-4 rounded-lg p-3 flex flex-col gap-1 ${bgClass}`}>
+                                    <div
+                                        onClick={() => router.push(`/activities/${activity.id}`)}
+                                        className={`flex-1 border-l-4 rounded-lg p-3 flex flex-col gap-1 cursor-pointer ${bgClass}`}
+                                    >
                                         <span className={`text-[15px] font-medium ${textClass}`}>{activity.title}</span>
                                         <span className={`text-[13px] ${subtitleClass}`}>
                                             {activity.type === 'task' ? 'Due Date' : ''}

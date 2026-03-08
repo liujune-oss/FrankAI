@@ -15,6 +15,7 @@ export interface Activity {
     is_all_day: boolean;
     location?: string;
     tags: string[];
+    project_id?: string;
     created_at: string;
     updated_at: string;
 }

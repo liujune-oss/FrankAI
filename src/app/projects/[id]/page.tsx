@@ -15,22 +15,26 @@ const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color:
 };
 const TYPE_ORDER = ['milestone', 'event', 'task', 'reminder'];
 
-function ActivityCard({ a, showTypeBadge, onToggle, onDelete }: {
+function ActivityCard({ a, showTypeBadge, onToggle, onDelete, onNavigate }: {
     a: Activity;
     showTypeBadge?: boolean;
     onToggle: (a: Activity) => void;
     onDelete: (id: string) => void;
+    onNavigate?: () => void;
 }) {
     const cfg = TYPE_CONFIG[a.type] ?? TYPE_CONFIG.task;
     const isMilestone = a.type === 'milestone';
     return (
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${a.status === 'completed' ? 'bg-zinc-500/10 border-white/5 opacity-50' : `${cfg.bg} ${cfg.border}`}`}>
+        <div
+            onClick={onNavigate}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${onNavigate ? 'cursor-pointer' : ''} ${a.status === 'completed' ? 'bg-zinc-500/10 border-white/5 opacity-50' : `${cfg.bg} ${cfg.border}`}`}
+        >
             {isMilestone ? (
                 <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
                     <div className={`w-2.5 h-2.5 rotate-45 ${a.status === 'completed' ? 'bg-zinc-500' : 'bg-amber-400'}`} />
                 </div>
             ) : (
-                <button onClick={() => onToggle(a)} className="flex-shrink-0">
+                <button onClick={e => { e.stopPropagation(); onToggle(a); }} className="flex-shrink-0">
                     {a.status === 'completed'
                         ? <CheckSquare size={18} className={cfg.color} />
                         : <Square size={18} className={`${cfg.color} opacity-50`} />}
@@ -56,7 +60,7 @@ function ActivityCard({ a, showTypeBadge, onToggle, onDelete }: {
                     </p>
                 )}
             </div>
-            <button onClick={() => onDelete(a.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors flex-shrink-0">
+            <button onClick={e => { e.stopPropagation(); onDelete(a.id); }} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors flex-shrink-0">
                 <Trash2 size={15} />
             </button>
         </div>
@@ -345,13 +349,13 @@ export default function ProjectDetailPage() {
                                         {cfg.icon}<span>{cfg.label}</span>
                                     </div>
                                     <div className="space-y-2">
-                                        {group.map(a => <ActivityCard key={a.id} a={a} onToggle={handleToggle} onDelete={id => setDeleteItemId(id)} />)}
+                                        {group.map(a => <ActivityCard key={a.id} a={a} onToggle={handleToggle} onDelete={id => setDeleteItemId(id)} onNavigate={() => router.push(`/activities/${a.id}`)} />)}
                                     </div>
                                 </div>
                             );
                         })}
                         {activities.filter(a => !TYPE_ORDER.includes(a.type)).map(a => (
-                            <ActivityCard key={a.id} a={a} onToggle={handleToggle} onDelete={id => setDeleteItemId(id)} />
+                            <ActivityCard key={a.id} a={a} onToggle={handleToggle} onDelete={id => setDeleteItemId(id)} onNavigate={() => router.push(`/activities/${a.id}`)} />
                         ))}
                     </>
                 ) : (
@@ -363,7 +367,7 @@ export default function ProjectDetailPage() {
                                 const tb = new Date(b.start_time || b.end_time || b.created_at).getTime();
                                 return ta - tb;
                             })
-                            .map(a => <ActivityCard key={a.id} a={a} showTypeBadge onToggle={handleToggle} onDelete={id => setDeleteItemId(id)} />)
+                            .map(a => <ActivityCard key={a.id} a={a} showTypeBadge onToggle={handleToggle} onDelete={id => setDeleteItemId(id)} onNavigate={() => router.push(`/activities/${a.id}`)} />)
                         }
                     </div>
                 )}
