@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import ConversationDrawer from "@/components/ConversationDrawer";
 import { getAllConversations, getActiveConversationId, setActiveConversationId, Conversation } from "@/lib/conversations";
-import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, FileText, Loader2, Copy, X as XIcon, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
+import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, FileText, Loader2, Copy, X as XIcon, AlertTriangle, ChevronDown, ChevronRight, LayoutList, Clock } from "lucide-react";
 import { useActivities, Activity } from "@/hooks/useActivities";
 
 export default function TasksPage() {
@@ -67,6 +67,21 @@ export default function TasksPage() {
     const [logCopied, setLogCopied] = useState(false);
 
     const [showCompleted, setShowCompleted] = useState(false);
+
+    type SortMode = 'time' | 'group';
+    const [sortMode, setSortMode] = useState<SortMode>(() => {
+        if (typeof window !== 'undefined') {
+            return (localStorage.getItem('task_sort_mode') as SortMode) || 'time';
+        }
+        return 'time';
+    });
+    const toggleSortMode = () => {
+        setSortMode(prev => {
+            const next = prev === 'time' ? 'group' : 'time';
+            localStorage.setItem('task_sort_mode', next);
+            return next;
+        });
+    };
 
     // Card-level voice note state
     const [cardRecordingId, setCardRecordingId] = useState<string | null>(null);
@@ -433,18 +448,27 @@ export default function TasksPage() {
                 <button onClick={() => setDrawerOpen(true)} className="p-1.5 rounded-lg hover:bg-muted transition-colors flex-shrink-0">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="18" y2="18" /></svg>
                 </button>
-                <h1 className="text-base font-semibold tracking-tight mx-3 flex-1 text-center">Tasks</h1>
+                <h1 className="text-base font-semibold tracking-tight mx-3 flex-1 text-center">活动</h1>
                 <div className="w-8" />
             </header>
 
-            {/* Filters */}
-            <div className="flex items-center gap-2 px-4 py-2 overflow-x-auto no-scrollbar flex-none">
-                <button onClick={toggleAll} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${isAllSelected ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>全部</button>
-                <button onClick={() => toggleType('task')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('task') ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>待办</button>
-                <button onClick={() => toggleType('event')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('event') ? 'bg-blue-500/20 text-blue-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>日程</button>
-                <button onClick={() => toggleType('reminder')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('reminder') ? 'bg-pink-500/20 text-pink-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>提醒</button>
-                <button onClick={() => toggleType('log')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('log') ? 'bg-purple-500/20 text-purple-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>随手记</button>
-                <button onClick={() => toggleType('milestone')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('milestone') ? 'bg-amber-500/20 text-amber-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>里程碑</button>
+            {/* Filters + Sort Toggle */}
+            <div className="flex items-center gap-2 px-4 py-2 flex-none border-b border-white/5">
+                <div className="flex items-center gap-2 flex-1 overflow-x-auto no-scrollbar">
+                    <button onClick={toggleAll} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${isAllSelected ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>全部</button>
+                    <button onClick={() => toggleType('task')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('task') ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>待办</button>
+                    <button onClick={() => toggleType('event')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('event') ? 'bg-blue-500/20 text-blue-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>日程</button>
+                    <button onClick={() => toggleType('reminder')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('reminder') ? 'bg-pink-500/20 text-pink-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>提醒</button>
+                    <button onClick={() => toggleType('log')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('log') ? 'bg-purple-500/20 text-purple-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>随手记</button>
+                    <button onClick={() => toggleType('milestone')} className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${selectedTypes.has('milestone') ? 'bg-amber-500/20 text-amber-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-800/80'}`}>里程碑</button>
+                </div>
+                <button
+                    onClick={toggleSortMode}
+                    className="flex-shrink-0 p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                    title={sortMode === 'time' ? '切换为分组视图' : '切换为时间视图'}
+                >
+                    {sortMode === 'time' ? <LayoutList size={16} /> : <Clock size={16} />}
+                </button>
             </div>
 
             {/* List */}
@@ -530,28 +554,53 @@ export default function TasksPage() {
                         <div className="text-center text-sm text-zinc-500 py-10">暂无匹配的活动</div>
                     );
 
+                    const getRefTime = (a: Activity) => a.start_time || a.end_time || a.created_at;
+                    const sortByTime = (arr: Activity[]) => [...arr].sort((a, b) => new Date(getRefTime(a)).getTime() - new Date(getRefTime(b)).getTime());
+
+                    const GROUP_LABELS: Record<string, string> = { task: '待办', event: '日程', reminder: '提醒', log: '随手记', milestone: '里程碑' };
+                    const GROUP_ORDER = ['task', 'event', 'reminder', 'milestone', 'log'];
+
+                    const renderCompleted = () => completedItems.length > 0 && (
+                        <div className="pt-2">
+                            <button onClick={() => setShowCompleted(v => !v)} className="flex items-center gap-1.5 text-[13px] font-medium text-zinc-500 hover:text-zinc-300 transition-colors mb-3">
+                                {showCompleted ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                                已完成 ({completedItems.length})
+                            </button>
+                            {showCompleted && <div className="space-y-3">{sortByTime(completedItems).map(renderCard)}</div>}
+                        </div>
+                    );
+
+                    if (sortMode === 'time') {
+                        return (
+                            <>
+                                {activeItems.length === 0 && completedItems.length > 0 && (
+                                    <div className="text-center text-sm text-zinc-600 py-4">所有事项已完成</div>
+                                )}
+                                {sortByTime(activeItems).map(renderCard)}
+                                {renderCompleted()}
+                            </>
+                        );
+                    }
+
+                    // 分组模式
+                    const groups = GROUP_ORDER.filter(t => selectedTypes.has(t as FilterType)).map(type => ({
+                        type,
+                        label: GROUP_LABELS[type],
+                        items: sortByTime(activeItems.filter(a => a.type === type)),
+                    })).filter(g => g.items.length > 0);
+
                     return (
                         <>
                             {activeItems.length === 0 && completedItems.length > 0 && (
                                 <div className="text-center text-sm text-zinc-600 py-4">所有事项已完成</div>
                             )}
-                            {activeItems.map(renderCard)}
-                            {completedItems.length > 0 && (
-                                <div className="pt-2">
-                                    <button
-                                        onClick={() => setShowCompleted(v => !v)}
-                                        className="flex items-center gap-1.5 text-[13px] font-medium text-zinc-500 hover:text-zinc-300 transition-colors mb-3"
-                                    >
-                                        {showCompleted ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                                        已完成 ({completedItems.length})
-                                    </button>
-                                    {showCompleted && (
-                                        <div className="space-y-3">
-                                            {completedItems.map(renderCard)}
-                                        </div>
-                                    )}
+                            {groups.map(g => (
+                                <div key={g.type} className="space-y-3">
+                                    <h3 className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 px-1">{g.label}</h3>
+                                    {g.items.map(renderCard)}
                                 </div>
-                            )}
+                            ))}
+                            {renderCompleted()}
                         </>
                     );
                 })()}
