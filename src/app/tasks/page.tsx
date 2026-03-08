@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import ConversationDrawer from "@/components/ConversationDrawer";
 import { getAllConversations, getActiveConversationId, setActiveConversationId, Conversation } from "@/lib/conversations";
-import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, FileText, Loader2, Copy, X as XIcon } from "lucide-react";
+import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, FileText, Loader2, Copy, X as XIcon, AlertTriangle } from "lucide-react";
 import { useActivities, Activity } from "@/hooks/useActivities";
 
 export default function TasksPage() {
@@ -433,10 +433,15 @@ export default function TasksPage() {
                 ) : (
                     activities.filter(a => filter === 'all' || a.type === filter).map((activity) => {
                         const isCompleted = activity.status === 'completed';
+                        const refTime = activity.end_time || activity.start_time;
+                        const overdue = !isCompleted && activity.type !== 'log' && !!refTime && new Date(refTime) < new Date();
 
                         let bgClass = "bg-zinc-900 border-white/5";
                         let typeColor = "text-zinc-400 bg-zinc-500/10";
-                        if (!isCompleted) {
+                        if (overdue) {
+                            bgClass = "bg-red-500/15 border-red-500/50";
+                            typeColor = "text-red-400 bg-red-500/10";
+                        } else if (!isCompleted) {
                             if (activity.type === 'task') { bgClass = "bg-emerald-500/10 border-emerald-500/20"; typeColor = "text-emerald-400 bg-emerald-500/10"; }
                             if (activity.type === 'event') { bgClass = "bg-blue-500/10 border-blue-500/20"; typeColor = "text-blue-400 bg-blue-500/10"; }
                             if (activity.type === 'reminder') { bgClass = "bg-pink-500/10 border-pink-500/20"; typeColor = "text-pink-400 bg-pink-500/10"; }
@@ -475,6 +480,11 @@ export default function TasksPage() {
                                         <span className={`text-[11px] font-medium px-2 py-0.5 rounded w-fit ${typeColor}`}>
                                             {activity.type}
                                         </span>
+                                        {overdue && (
+                                            <span className="flex items-center gap-0.5 text-[11px] font-medium px-2 py-0.5 rounded bg-red-500/20 text-red-400">
+                                                <AlertTriangle size={10} />已过期
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                                 <button

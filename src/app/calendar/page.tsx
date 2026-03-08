@@ -9,7 +9,7 @@ import { useActivities, Activity } from "@/hooks/useActivities";
 import { isSameDay, addDays, format, startOfToday, parseISO } from "date-fns";
 import { useRef } from "react";
 
-import { Mic, Loader2 } from "lucide-react";
+import { Mic, Loader2, AlertTriangle } from "lucide-react";
 
 export default function CalendarPage() {
     const router = useRouter();
@@ -228,7 +228,15 @@ export default function CalendarPage() {
                             let textClass = "text-zinc-100";
                             let subtitleClass = "text-zinc-400";
 
-                            if (activity.type === 'task') { bgClass = "bg-emerald-500/10 border-emerald-500/20 border-l-emerald-500"; textClass = "text-emerald-100"; subtitleClass = "text-emerald-400/80"; }
+                            const refTime = activity.end_time || activity.start_time;
+                            const overdue = activity.status !== 'completed' && activity.status !== 'cancelled'
+                                && activity.type !== 'log' && !!refTime && new Date(refTime) < new Date();
+
+                            if (overdue) {
+                                bgClass = "bg-red-500/15 border-red-500/50 border-l-red-500";
+                                textClass = "text-red-100";
+                                subtitleClass = "text-red-400/80";
+                            } else if (activity.type === 'task') { bgClass = "bg-emerald-500/10 border-emerald-500/20 border-l-emerald-500"; textClass = "text-emerald-100"; subtitleClass = "text-emerald-400/80"; }
                             else if (activity.type === 'event') { bgClass = "bg-blue-500/10 border-blue-500/20 border-l-blue-500"; textClass = "text-blue-100"; subtitleClass = "text-blue-400/80"; }
                             else if (activity.type === 'reminder') { bgClass = "bg-pink-500/10 border-pink-500/20 border-l-pink-500"; textClass = "text-pink-100"; subtitleClass = "text-pink-400/80"; }
                             else if (activity.type === 'log') { bgClass = "bg-purple-500/10 border-purple-500/20 border-l-purple-500"; textClass = "text-purple-100"; subtitleClass = "text-purple-400/80"; }
@@ -237,19 +245,22 @@ export default function CalendarPage() {
 
                             return (
                                 <div key={activity.id} className="flex w-full gap-4">
-                                    <div className="text-[13px] font-medium text-zinc-500 pt-1 w-12 text-right flex-shrink-0">
+                                    <div className={`text-[13px] font-medium pt-1 w-12 text-right flex-shrink-0 ${overdue ? 'text-red-400' : 'text-zinc-500'}`}>
                                         {format(actDate, 'HH:mm')}
                                     </div>
                                     <div
                                         onClick={() => router.push(`/activities/${activity.id}`)}
                                         className={`flex-1 border-l-4 rounded-lg p-3 flex flex-col gap-1 cursor-pointer ${bgClass}`}
                                     >
-                                        <span className={`text-[15px] font-medium ${textClass}`}>{activity.title}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-[15px] font-medium flex-1 ${textClass}`}>{activity.title}</span>
+                                            {overdue && <span className="flex items-center gap-0.5 text-[11px] font-medium px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 shrink-0"><AlertTriangle size={10} />已过期</span>}
+                                        </div>
                                         <span className={`text-[13px] ${subtitleClass}`}>
-                                            {activity.type === 'task' ? 'Due Date' : ''}
+                                            {activity.type === 'task' ? '待办' : ''}
                                             {activity.type === 'event' && activity.start_time && activity.end_time ? `${format(parseISO(activity.start_time), 'HH:mm')} - ${format(parseISO(activity.end_time), 'HH:mm')}` : ''}
-                                            {activity.type === 'reminder' ? 'Reminder' : ''}
-                                            {activity.type === 'log' ? 'Log Entry' : ''}
+                                            {activity.type === 'reminder' ? '提醒' : ''}
+                                            {activity.type === 'log' ? '随手记' : ''}
                                         </span>
                                     </div>
                                     <button
