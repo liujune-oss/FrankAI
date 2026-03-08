@@ -64,6 +64,20 @@ function syncConvToCloud(conv: Conversation): void {
     }).catch(() => {});
 }
 
+// 防抖 Map：convId → timer，消息停止变化 3s 后才真正上传
+const syncDebounceMap = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** 防抖版上传：同一会话 3s 内多次调用只触发最后一次 */
+function syncConvToCloudDebounced(conv: Conversation): void {
+    const prev = syncDebounceMap.get(conv.id);
+    if (prev) clearTimeout(prev);
+    const timer = setTimeout(() => {
+        syncDebounceMap.delete(conv.id);
+        syncConvToCloud(conv);
+    }, 3000);
+    syncDebounceMap.set(conv.id, timer);
+}
+
 /** 后台写墓碑（服务端保留记录但清空内容），不阻塞 UI */
 function deleteConvFromCloud(id: string): void {
     const headers = getCloudAuthHeaders();
@@ -232,7 +246,7 @@ export function useConversations() {
                 updatedAt: Date.now(),
             };
             await saveConversation(updated);
-            syncConvToCloud(updated); // 后台同步，不 await
+            syncConvToCloudDebounced(updated); // 防抖 3s，减少 API 调用
             setActiveConv(updated);
             setConversations((prev) =>
                 prev
