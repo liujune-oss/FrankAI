@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Conversation } from "@/lib/conversations";
 import versionData from "../../version.json";
-import { Beaker, CheckSquare, Calendar, FolderKanban, Settings, RefreshCw, ChevronDown, BrainCircuit, Plus, Trash2 } from "lucide-react";
+import { Beaker, CheckSquare, Calendar, FolderKanban, Settings, RefreshCw, ChevronDown, BrainCircuit, Plus, Trash2, CloudOff } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -23,6 +23,7 @@ interface ConversationDrawerProps {
     pushSystemInstruction: (value: string) => Promise<void>;
     isAdmin: boolean;
     onOpenSandbox: () => void;
+    onClearCloud: () => void;
 }
 
 const NAV_ITEMS = [
@@ -42,9 +43,11 @@ export default function ConversationDrawer({
     onOpenMemoryManager,
     isAdmin,
     onOpenSandbox,
+    onClearCloud,
 }: ConversationDrawerProps) {
     const [showSettings, setShowSettings] = useState(false);
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+    const [pendingClearCloud, setPendingClearCloud] = useState(false);
     const pathname = usePathname();
 
     return (
@@ -163,6 +166,26 @@ export default function ConversationDrawer({
                             >
                                 <RefreshCw size={13} />强制刷新缓存
                             </button>
+                            {pendingClearCloud ? (
+                                <div className="flex items-center gap-1 px-3 py-2">
+                                    <span className="text-xs text-red-400 flex-1">确认清空云端？</span>
+                                    <button
+                                        onClick={() => { onClearCloud(); setPendingClearCloud(false); }}
+                                        className="text-[11px] font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-400"
+                                    >确认</button>
+                                    <button
+                                        onClick={() => setPendingClearCloud(false)}
+                                        className="text-[11px] px-2 py-0.5 rounded bg-zinc-700 text-zinc-400"
+                                    >取消</button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setPendingClearCloud(true)}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400/70 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors"
+                                >
+                                    <CloudOff size={13} />清空云端记录
+                                </button>
+                            )}
                             <button
                                 onClick={() => { onClose(); onOpenSandbox(); }}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-purple-400 hover:text-purple-300 rounded-lg hover:bg-purple-500/10 transition-colors"

@@ -190,6 +190,7 @@ export default function ChatPage() {
         pushSystemInstruction={auth.pushSystemInstruction}
         isAdmin={isAdmin}
         onOpenSandbox={() => { setIsSandboxOpen(true); conv.setDrawerOpen(false); }}
+        onClearCloud={() => conv.handleClearCloud()}
       />
 
       <ChatHeader

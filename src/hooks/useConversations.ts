@@ -303,6 +303,13 @@ export function useConversations() {
         [activeConv, conversations, handleSwitchConversation, handleNewChat]
     );
 
+    // 仅清空云端记录，不影响本地数据
+    const handleClearCloud = useCallback(async () => {
+        clearAllConvsFromCloud();
+        // 重置增量同步时间戳，下次打开抽屉做全量同步
+        setLastSyncTs(EPOCH_ISO);
+    }, []);
+
     // Clear all
     const handleClearAll = useCallback(async (isLoading: boolean) => {
         if (isLoading) return;
@@ -325,6 +332,7 @@ export function useConversations() {
         messages,
         setMessages,
         drawerOpen,
+        handleClearCloud,
         setDrawerOpen,
         saveMessages,
         handleNewChat,
