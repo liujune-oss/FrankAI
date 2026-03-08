@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import ConversationDrawer from "@/components/ConversationDrawer";
 import { getAllConversations, getActiveConversationId, setActiveConversationId, Conversation } from "@/lib/conversations";
-import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, Trash2, FileText, Loader2, Copy, X as XIcon } from "lucide-react";
+import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, FileText, Loader2, Copy, X as XIcon } from "lucide-react";
 import { useActivities, Activity } from "@/hooks/useActivities";
 
 export default function TasksPage() {
@@ -35,9 +35,10 @@ export default function TasksPage() {
     const [voiceLog, setVoiceLog] = useState<string | null>(null);
     const [logCopied, setLogCopied] = useState(false);
 
-    // Custom Delete Dialog State
-    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const [activityToDeleteId, setActivityToDeleteId] = useState<string | null>(null);
+    // Card-level voice note state
+    const [cardRecordingId, setCardRecordingId] = useState<string | null>(null);
+    const [cardProcessingId, setCardProcessingId] = useState<string | null>(null);
+    const cardMediaRecorderRef = useRef<MediaRecorder | null>(null);
 
     useEffect(() => {
         getAllConversations().then(setConversations);
@@ -66,23 +67,59 @@ export default function TasksPage() {
         await updateActivity(activity.id, { status: newStatus });
     };
 
-    const handleDelete = async (id: string, e: React.MouseEvent) => {
+    const handleCardMicToggle = async (activityId: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        setActivityToDeleteId(id);
-        setIsDeleteDialogOpen(true);
-    };
+        if (cardProcessingId) return;
 
-    const confirmDelete = async () => {
-        if (activityToDeleteId) {
-            await deleteActivity(activityToDeleteId);
+        if (cardRecordingId === activityId) {
+            cardMediaRecorderRef.current?.stop();
+            setCardRecordingId(null);
+            return;
         }
-        setIsDeleteDialogOpen(false);
-        setActivityToDeleteId(null);
-    };
+        if (cardRecordingId) return;
 
-    const cancelDelete = () => {
-        setIsDeleteDialogOpen(false);
-        setActivityToDeleteId(null);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            cardMediaRecorderRef.current = mediaRecorder;
+            const chunks: BlobPart[] = [];
+
+            mediaRecorder.ondataavailable = (ev) => { if (ev.data.size > 0) chunks.push(ev.data); };
+            mediaRecorder.onstop = async () => {
+                stream.getTracks().forEach(t => t.stop());
+                setCardProcessingId(activityId);
+                try {
+                    const blob = new Blob(chunks, { type: 'audio/webm' });
+                    const formData = new FormData();
+                    formData.append('audio', blob, 'note.webm');
+                    const sttRes = await fetch('/api/speech-to-text', {
+                        method: 'POST',
+                        headers: {
+                            'x-activation-token': auth.getAuthHeaders()['x-activation-token'],
+                            'x-device-fingerprint': auth.getAuthHeaders()['x-device-fingerprint'],
+                        },
+                        body: formData,
+                    });
+                    const { transcript } = await sttRes.json();
+                    if (!transcript?.trim()) return;
+                    const now = new Date().toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const current = activities.find(a => a.id === activityId);
+                    const newDesc = current?.description
+                        ? `${current.description}\n\n[${now}] ${transcript.trim()}`
+                        : `[${now}] ${transcript.trim()}`;
+                    await updateActivity(activityId, { description: newDesc });
+                } catch (err: any) {
+                    alert('语音备注失败：' + err.message);
+                } finally {
+                    setCardProcessingId(null);
+                }
+            };
+
+            mediaRecorder.start();
+            setCardRecordingId(activityId);
+        } catch (err: any) {
+            alert('无法访问麦克风：' + err.message);
+        }
     };
 
     const handleSwitch = async (conv: Conversation) => {
@@ -439,8 +476,14 @@ export default function TasksPage() {
                                         </span>
                                     </div>
                                 </div>
-                                <button onClick={(e) => handleDelete(activity.id, e)} className="p-2 ml-auto shrink-0 text-zinc-500 hover:text-red-400 transition-colors">
-                                    <Trash2 size={18} />
+                                <button
+                                    onClick={(e) => handleCardMicToggle(activity.id, e)}
+                                    disabled={!!cardProcessingId}
+                                    className={`p-2 ml-auto shrink-0 transition-colors ${cardRecordingId === activity.id ? 'text-red-400 animate-pulse' : cardProcessingId === activity.id ? 'text-zinc-400' : 'text-zinc-500 hover:text-blue-400'}`}
+                                >
+                                    {cardProcessingId === activity.id
+                                        ? <Loader2 size={18} className="animate-spin" />
+                                        : <Mic size={18} />}
                                 </button>
                             </div>
                         );
@@ -477,30 +520,6 @@ export default function TasksPage() {
                     {sttMode === 'deepgram' ? '流式' : sttMode === 'local' ? '本地' : '云端'}
                 </button>
             </div>
-
-            {/* Custom Delete Dialog */}
-            {isDeleteDialogOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
-                        <h3 className="text-lg font-semibold text-zinc-100 mb-2">确认删除</h3>
-                        <p className="text-sm text-zinc-400 mb-6">您确定要删除这条记录吗？此操作无法撤销。</p>
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={cancelDelete}
-                                className="px-4 py-2 rounded-xl text-sm font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition-colors"
-                            >
-                                取消
-                            </button>
-                            <button
-                                onClick={confirmDelete}
-                                className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-red-500/80 hover:bg-red-500 transition-colors"
-                            >
-                                确认删除
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Voice Timing Log Overlay */}
             {voiceLog && (
