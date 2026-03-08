@@ -31,16 +31,29 @@ export async function GET(req: NextRequest) {
         query = query.gt("updated_at", since);
     }
 
-    const { data, error } = await query;
+    let { data, error } = await query;
+
+    // deleted_at 列不存在时（迁移未执行），降级为不含墓碑字段的查询
+    if (error && error.message?.includes("deleted_at")) {
+        const fallback = supabaseAdmin
+            .from("conversations")
+            .select("id, title, messages, created_at, updated_at")
+            .eq("user_id", userId)
+            .order("updated_at", { ascending: false });
+        const result = since ? await fallback.gt("updated_at", since) : await fallback;
+        data = result.data;
+        error = result.error;
+    }
+
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const conversations = (data ?? []).map((row) => ({
+    const conversations = (data ?? []).map((row: Record<string, unknown>) => ({
         id: row.id,
-        title: row.title ?? "",
-        messages: row.messages ?? [],
-        createdAt: new Date(row.created_at).getTime(),
-        updatedAt: new Date(row.updated_at).getTime(),
-        deletedAt: row.deleted_at ? new Date(row.deleted_at).getTime() : null,
+        title: (row.title as string) ?? "",
+        messages: (row.messages as unknown[]) ?? [],
+        createdAt: new Date(row.created_at as string).getTime(),
+        updatedAt: new Date(row.updated_at as string).getTime(),
+        deletedAt: row.deleted_at ? new Date(row.deleted_at as string).getTime() : null,
     }));
 
     return NextResponse.json({
