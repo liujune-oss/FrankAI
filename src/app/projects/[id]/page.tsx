@@ -70,9 +70,18 @@ export default function ProjectDetailPage() {
     const id = params.id as string;
 
     const { updateProject, deleteProject } = useProjects();
-    const [project, setProject] = useState<Project | null>(null);
-    const [activities, setActivities] = useState<Activity[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const actCacheKey = `project_activities_${id}`;
+    const projCacheKey = `project_detail_${id}`;
+
+    const [project, setProject] = useState<Project | null>(() => {
+        try { const c = localStorage.getItem(projCacheKey); return c ? JSON.parse(c) : null; } catch { return null; }
+    });
+    const [activities, setActivities] = useState<Activity[]>(() => {
+        try { const c = localStorage.getItem(actCacheKey); return c ? JSON.parse(c) : []; } catch { return []; }
+    });
+    const [isLoading, setIsLoading] = useState(() => {
+        try { return !localStorage.getItem(projCacheKey); } catch { return true; }
+    });
 
     // Inline title editing
     const [editingTitle, setEditingTitle] = useState(false);
@@ -111,6 +120,10 @@ export default function ProjectDetailPage() {
             const { activities: a } = await actRes.json();
             setProject(p);
             setActivities(a || []);
+            try {
+                localStorage.setItem(projCacheKey, JSON.stringify(p));
+                localStorage.setItem(actCacheKey, JSON.stringify(a || []));
+            } catch { }
         } finally {
             setIsLoading(false);
         }
@@ -153,7 +166,11 @@ export default function ProjectDetailPage() {
             });
             const data = await res.json();
             if (res.ok) {
-                setActivities(prev => [data.activity, ...prev]);
+                setActivities(prev => {
+                    const next = [data.activity, ...prev];
+                    try { localStorage.setItem(actCacheKey, JSON.stringify(next)); } catch { }
+                    return next;
+                });
                 setAddTitle(''); setAddDate(''); setShowAddForm(false);
             }
         } finally {
@@ -169,12 +186,20 @@ export default function ProjectDetailPage() {
             body: JSON.stringify({ id: a.id, status: newStatus }),
         });
         const data = await res.json();
-        if (res.ok) setActivities(prev => prev.map(x => x.id === a.id ? data.activity : x));
+        if (res.ok) setActivities(prev => {
+            const next = prev.map(x => x.id === a.id ? data.activity : x);
+            try { localStorage.setItem(actCacheKey, JSON.stringify(next)); } catch { }
+            return next;
+        });
     };
 
     const handleDeleteItem = async (itemId: string) => {
         const res = await fetch(`/api/activities?id=${itemId}`, { method: 'DELETE', headers: auth.getAuthHeaders() });
-        if (res.ok) setActivities(prev => prev.filter(a => a.id !== itemId));
+        if (res.ok) setActivities(prev => {
+            const next = prev.filter(a => a.id !== itemId);
+            try { localStorage.setItem(actCacheKey, JSON.stringify(next)); } catch { }
+            return next;
+        });
         setDeleteItemId(null);
     };
 

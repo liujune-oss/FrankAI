@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import ConversationDrawer from "@/components/ConversationDrawer";
 import { getAllConversations, getActiveConversationId, setActiveConversationId, Conversation } from "@/lib/conversations";
@@ -10,6 +11,7 @@ import { isSameDay, addDays, format, startOfToday, parseISO } from "date-fns";
 import { Trash2 } from "lucide-react";
 
 export default function CalendarPage() {
+    const router = useRouter();
     const auth = useAuth();
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -59,11 +61,11 @@ export default function CalendarPage() {
 
     const handleSwitch = async (conv: Conversation) => {
         await setActiveConversationId(conv.id);
-        window.location.href = '/';
+        router.push('/');
     };
 
     const handleNew = async () => {
-        window.location.href = '/';
+        router.push('/');
     };
 
     const handleDelete = async (id: string, e: React.MouseEvent) => {

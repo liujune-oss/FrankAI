@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import ConversationDrawer from "@/components/ConversationDrawer";
 import { getAllConversations, getActiveConversationId, setActiveConversationId, Conversation } from "@/lib/conversations";
@@ -8,6 +9,7 @@ import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, Trash2, FileT
 import { useActivities, Activity } from "@/hooks/useActivities";
 
 export default function TasksPage() {
+    const router = useRouter();
     const auth = useAuth();
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -85,11 +87,11 @@ export default function TasksPage() {
 
     const handleSwitch = async (conv: Conversation) => {
         await setActiveConversationId(conv.id);
-        window.location.href = '/';
+        router.push('/');
     };
 
     const handleNew = async () => {
-        window.location.href = '/';
+        router.push('/');
     };
 
     // ── Deepgram 流式 STT（边说边识别）─────────────────────────────────────────

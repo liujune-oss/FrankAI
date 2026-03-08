@@ -26,18 +26,37 @@ export const STATUS_LABELS: Record<Project['status'], string> = {
     on_hold: '已暂停',
 };
 
+const CACHE_KEY = 'projects_cache';
+
+function readCache(): Project[] {
+    if (typeof window === 'undefined') return [];
+    try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+}
+
+function writeCache(data: Project[]) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { }
+}
+
 export function useProjects() {
     const auth = useAuth();
-    const [projects, setProjects] = useState<Project[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
+    const [projects, setProjects] = useState<Project[]>(() => readCache());
+    // Only show spinner if there's truly nothing to show yet
+    const [isLoading, setIsLoading] = useState(() => readCache().length === 0);
 
     const fetchProjects = useCallback(async () => {
         if (!auth.isActivated) return;
-        setIsLoading(true);
+        // Silent refresh if we already have cached data
+        if (readCache().length === 0) setIsLoading(true);
         try {
             const res = await fetch('/api/projects', { headers: auth.getAuthHeaders() });
             const data = await res.json();
-            if (res.ok) setProjects(data.projects || []);
+            if (res.ok) {
+                setProjects(data.projects || []);
+                writeCache(data.projects || []);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -51,7 +70,11 @@ export function useProjects() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        setProjects(prev => [data.project, ...prev]);
+        setProjects(prev => {
+            const next = [data.project, ...prev];
+            writeCache(next);
+            return next;
+        });
         return data.project as Project;
     };
 
@@ -63,7 +86,11 @@ export function useProjects() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        setProjects(prev => prev.map(p => p.id === id ? data.project : p));
+        setProjects(prev => {
+            const next = prev.map(p => p.id === id ? data.project : p);
+            writeCache(next);
+            return next;
+        });
         return data.project as Project;
     };
 
@@ -72,11 +99,12 @@ export function useProjects() {
             method: 'DELETE',
             headers: auth.getAuthHeaders(),
         });
-        if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.error);
-        }
-        setProjects(prev => prev.filter(p => p.id !== id));
+        if (!res.ok) { const data = await res.json(); throw new Error(data.error); }
+        setProjects(prev => {
+            const next = prev.filter(p => p.id !== id);
+            writeCache(next);
+            return next;
+        });
     };
 
     return { projects, isLoading, fetchProjects, createProject, updateProject, deleteProject };

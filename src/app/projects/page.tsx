@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjects, Project, PROJECT_COLORS, STATUS_LABELS } from "@/hooks/useProjects";
 import ConversationDrawer from "@/components/ConversationDrawer";
@@ -9,6 +10,7 @@ import { Plus, Trash2, ChevronRight, Loader2, Mic, Copy, X as XIcon } from "luci
 import Link from "next/link";
 
 export default function ProjectsPage() {
+    const router = useRouter();
     const auth = useAuth();
     const { projects, isLoading, fetchProjects, createProject, deleteProject } = useProjects();
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -117,7 +119,7 @@ export default function ProjectsPage() {
 
     const handleSwitch = async (conv: Conversation) => {
         await setActiveConversationId(conv.id);
-        window.location.href = '/';
+        router.push('/');
     };
 
     if (!auth.isActivated) return null;

@@ -30,17 +30,18 @@ export function useActivities() {
         }
         return [];
     });
-    // Only show loading if we have absolutely no cached data
-    const [isLoading, setIsLoading] = useState(() => activities.length === 0);
+    // Only show spinner if truly no cached data
+    const [isLoading, setIsLoading] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        try { return !localStorage.getItem('activities_cache'); } catch { return false; }
+    });
     const [error, setError] = useState<string | null>(null);
 
     const fetchActivities = useCallback(async (params?: { type?: string; status?: string; start?: string; end?: string; force?: boolean }) => {
         if (!auth.isActivated) return;
 
-        // If we have no activities at all, show the loading spinner. Otherwise, do it silently.
-        if (activities.length === 0) {
-            setIsLoading(true);
-        }
+        // Only show spinner if there's truly nothing cached to show
+        if (!localStorage.getItem('activities_cache')) setIsLoading(true);
         setError(null);
         try {
             const queryParams = new URLSearchParams();
@@ -68,7 +69,7 @@ export function useActivities() {
         } finally {
             setIsLoading(false);
         }
-    }, [auth.isActivated, auth.getAuthHeaders, activities.length]);
+    }, [auth.isActivated, auth.getAuthHeaders]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Listen for background updates (e.g., when the AI chat finishes modifying the database)
     useEffect(() => {
