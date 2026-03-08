@@ -172,19 +172,22 @@ export function useConversations() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
 
-    // 拉云端并合并到本地，更新列表
-    const syncFromCloud = useCallback(async () => {
-        const localConvs = await getAllConversations();
-        setIsSyncing(true);
-        const mergedConvs = await mergeWithCloud(localConvs);
-        setIsSyncing(false);
-        setConversations(mergedConvs);
+    // 拉云端并合并到本地，更新列表（不阻塞调用方）
+    const syncFromCloud = useCallback(() => {
+        getAllConversations().then(localConvs => {
+            setIsSyncing(true);
+            mergeWithCloud(localConvs).then(mergedConvs => {
+                setIsSyncing(false);
+                setConversations(mergedConvs);
+            });
+        });
     }, []);
 
-    // 抽屉打开时触发一次云端同步
-    useEffect(() => {
-        if (drawerOpen) syncFromCloud();
-    }, [drawerOpen, syncFromCloud]);
+    // 打开抽屉：立即开，同时后台触发一次云端同步
+    const openDrawer = useCallback(() => {
+        setDrawerOpen(true);
+        syncFromCloud();
+    }, [syncFromCloud]);
 
     // Initialization
     useEffect(() => {
@@ -332,6 +335,7 @@ export function useConversations() {
         messages,
         setMessages,
         drawerOpen,
+        openDrawer,
         handleClearCloud,
         setDrawerOpen,
         saveMessages,

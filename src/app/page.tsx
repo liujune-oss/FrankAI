@@ -196,7 +196,7 @@ export default function ChatPage() {
       <ChatHeader
         title={conv.activeConv?.title || "Gemini"}
         isLoading={chat.isLoading}
-        onOpenDrawer={() => conv.setDrawerOpen(true)}
+        onOpenDrawer={() => conv.openDrawer()}
       />
 
       <MessageList
