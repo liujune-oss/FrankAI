@@ -91,6 +91,7 @@ export default function AdminDashboard() {
     const [adminChatLogs, setAdminChatLogs] = useState<any[]>([]);
     const [chatLogsLoading, setChatLogsLoading] = useState(false);
     const [expandedChatLogUsers, setExpandedChatLogUsers] = useState<Set<string>>(new Set());
+    const [expandedChatLogSessions, setExpandedChatLogSessions] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         setSandboxEnabled(localStorage.getItem('sandbox_enabled') === 'true');
@@ -254,6 +255,15 @@ export default function AdminDashboard() {
             const next = new Set(prev);
             if (next.has(userId)) next.delete(userId);
             else next.add(userId);
+            return next;
+        });
+    };
+
+    const toggleChatLogSessionExpanded = (sessionId: string) => {
+        setExpandedChatLogSessions(prev => {
+            const next = new Set(prev);
+            if (next.has(sessionId)) next.delete(sessionId);
+            else next.add(sessionId);
             return next;
         });
     };
@@ -1011,19 +1021,53 @@ export default function AdminDashboard() {
                                                 </div>
 
                                                 {isExpanded && (
-                                                    <div className="p-4 sm:p-6 bg-gray-50/50 dark:bg-gray-900/20 border-t border-gray-100 dark:border-gray-700 space-y-4 max-h-[600px] overflow-y-auto">
-                                                        {userGroup.logs.map((log: any) => (
-                                                            <div key={log.id} className={`p-4 rounded-xl border max-w-[85%] ${log.role === 'user' ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30 ml-auto' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 mr-auto'}`}>
-                                                                <div className="flex items-center gap-2 mb-2">
-                                                                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${log.role === 'user' ? 'text-blue-700 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/40' : 'text-purple-700 bg-purple-100 dark:text-purple-400 dark:bg-purple-900/40'}`}>
-                                                                        {log.role}
-                                                                    </span>
-                                                                    <span className="text-xs text-gray-400 font-mono">{new Date(log.created_at).toLocaleString()}</span>
-                                                                    {log.session_id && <span className="text-[10px] text-gray-400 ml-auto truncate w-16" title={log.session_id}>S: {log.session_id.substring(0, 6)}</span>}
-                                                                </div>
-                                                                <div className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{log.content}</div>
-                                                            </div>
-                                                        ))}
+                                                    <div className="border-t border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+                                                        {(() => {
+                                                            // 按 session_id 分组，保持时间顺序
+                                                            const sessionMap: Record<string, any[]> = {};
+                                                            const sessionOrder: string[] = [];
+                                                            userGroup.logs.slice().reverse().forEach((log: any) => {
+                                                                const sid = log.session_id || 'unknown';
+                                                                if (!sessionMap[sid]) { sessionMap[sid] = []; sessionOrder.push(sid); }
+                                                                sessionMap[sid].push(log);
+                                                            });
+                                                            return sessionOrder.map(sid => {
+                                                                const logs = sessionMap[sid];
+                                                                const firstMsg = logs[0];
+                                                                const isSessionExpanded = expandedChatLogSessions.has(sid);
+                                                                return (
+                                                                    <div key={sid}>
+                                                                        <div
+                                                                            onClick={() => toggleChatLogSessionExpanded(sid)}
+                                                                            className="flex items-center justify-between px-4 sm:px-6 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+                                                                        >
+                                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                                <span className="text-xs font-mono text-gray-400 shrink-0">{sid.substring(0, 8)}</span>
+                                                                                <span className="text-xs text-gray-500 truncate">{firstMsg?.content?.substring(0, 40)}…</span>
+                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 shrink-0">{logs.length} 条</span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                                                                                <span className="text-[10px] text-gray-400">{new Date(firstMsg?.created_at).toLocaleDateString()}</span>
+                                                                                {isSessionExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
+                                                                            </div>
+                                                                        </div>
+                                                                        {isSessionExpanded && (
+                                                                            <div className="px-4 sm:px-6 py-4 bg-gray-50/50 dark:bg-gray-900/20 space-y-3 max-h-[500px] overflow-y-auto">
+                                                                                {logs.map((log: any) => (
+                                                                                    <div key={log.id} className={`p-3 rounded-xl border max-w-[85%] ${log.role === 'user' ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30 ml-auto' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 mr-auto'}`}>
+                                                                                        <div className="flex items-center gap-2 mb-1.5">
+                                                                                            <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm ${log.role === 'user' ? 'text-blue-700 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/40' : 'text-purple-700 bg-purple-100 dark:text-purple-400 dark:bg-purple-900/40'}`}>{log.role}</span>
+                                                                                            <span className="text-[10px] text-gray-400 font-mono">{new Date(log.created_at).toLocaleString()}</span>
+                                                                                        </div>
+                                                                                        <div className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{log.content}</div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            });
+                                                        })()}
                                                     </div>
                                                 )}
                                             </div>
