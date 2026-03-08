@@ -74,34 +74,20 @@ export async function POST(req: NextRequest) {
 
     const now = new Date().toISOString();
 
-    // 先尝试含 deleted_at: null 的写法（迁移已执行时可清除墓碑）
-    let { error } = await supabaseAdmin.from("conversations").upsert(
-        {
-            id: conv.id,
-            user_id: userId,
-            title: conv.title ?? "新会话",
-            messages: conv.messages ?? [],
-            created_at: conv.createdAt ? new Date(conv.createdAt).toISOString() : now,
-            updated_at: now,
-            deleted_at: null,
-        },
-        { onConflict: "id" }
-    );
+    // 不带 deleted_at（DB 默认 NULL，兼容迁移未执行的情况）
+    // 若记录曾被标记为墓碑，需在此处显式清除；待迁移确认执行后可追加 deleted_at: null
+    const upsertPayload: Record<string, unknown> = {
+        id: conv.id,
+        user_id: userId,
+        title: conv.title ?? "新会话",
+        messages: conv.messages ?? [],
+        created_at: conv.createdAt ? new Date(conv.createdAt).toISOString() : now,
+        updated_at: now,
+    };
 
-    // deleted_at 列不存在时降级（迁移未执行）
-    if (error && error.message?.includes("deleted_at")) {
-        ({ error } = await supabaseAdmin.from("conversations").upsert(
-            {
-                id: conv.id,
-                user_id: userId,
-                title: conv.title ?? "新会话",
-                messages: conv.messages ?? [],
-                created_at: conv.createdAt ? new Date(conv.createdAt).toISOString() : now,
-                updated_at: now,
-            },
-            { onConflict: "id" }
-        ));
-    }
+    const { error } = await supabaseAdmin
+        .from("conversations")
+        .upsert(upsertPayload, { onConflict: "id" });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, updatedAt: new Date(now).getTime() });
@@ -130,21 +116,12 @@ export async function DELETE(req: NextRequest) {
 
     const now = new Date().toISOString();
 
-    // 先尝试写墓碑（迁移已执行）
-    let { error } = await supabaseAdmin
+    // 真删（待迁移执行后可改为写墓碑：update deleted_at/updated_at/title/messages）
+    const { error } = await supabaseAdmin
         .from("conversations")
-        .update({ deleted_at: now, updated_at: now, title: "", messages: [] })
+        .delete()
         .eq("id", id)
         .eq("user_id", userId);
-
-    // deleted_at 列不存在时降级为真删
-    if (error && error.message?.includes("deleted_at")) {
-        ({ error } = await supabaseAdmin
-            .from("conversations")
-            .delete()
-            .eq("id", id)
-            .eq("user_id", userId));
-    }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
