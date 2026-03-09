@@ -28,8 +28,8 @@ export const UPSERT_ACTIVITY_DECLARATION = {
             title: { type: 'string', description: 'A short, concise title for the activity.' },
             description: { type: 'string', description: 'Detailed description or notes.' },
             type: { type: 'string', description: 'Category: event (meetings, appointments), task (todos), reminder, log, or milestone (key date/achievement in a project).' },
-            start_time: { type: 'string', description: 'ISO 8601 UTC start time (e.g. 2026-03-05T07:00:00Z for 3pm Shanghai).' },
-            end_time: { type: 'string', description: 'ISO 8601 UTC end time or deadline.' },
+            start_time: { type: 'string', description: 'Local time in ISO 8601 format WITHOUT timezone suffix, e.g. "2026-03-09T14:00:00" for 2pm. Do NOT convert to UTC.' },
+            end_time: { type: 'string', description: 'Local end time in ISO 8601 format WITHOUT timezone suffix, e.g. "2026-03-09T15:00:00". Do NOT convert to UTC.' },
             is_all_day: { type: 'boolean', description: 'True if the event lasts the entire day.' },
             priority: { type: 'string', description: 'low, medium, high, or urgent. Default: medium.' },
             location: { type: 'string', description: 'Physical location or virtual link.' },
@@ -39,6 +39,20 @@ export const UPSERT_ACTIVITY_DECLARATION = {
         required: ['title', 'tags'],
     },
 };
+
+/**
+ * 将时间字符串标准化为 UTC ISO 字符串。
+ * AI 输出的是上海本地时间（无时区后缀），统一加 +08:00 转 UTC。
+ * 若已有 Z 或 +/- 时区信息则直接解析。
+ */
+function toUTCString(timeStr: string | null | undefined): string | null | undefined {
+    if (!timeStr) return timeStr;
+    if (timeStr.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(timeStr)) {
+        return new Date(timeStr).toISOString();
+    }
+    // 无时区 → 视为上海本地时间 +08:00
+    return new Date(timeStr + '+08:00').toISOString();
+}
 
 export async function executeUpsertActivity(args: UpsertActivityArgs, userId: string): Promise<string> {
     if (!supabaseAdmin) return 'Error: Database connection not configured.';
@@ -71,6 +85,10 @@ export async function executeUpsertActivity(args: UpsertActivityArgs, userId: st
                 payload.end_time = undefined;
             }
         }
+
+        // 统一转 UTC（AI 输出本地时间，无时区后缀 → 视为 +08:00）
+        if (payload.start_time) payload.start_time = toUTCString(payload.start_time) ?? undefined;
+        if (payload.end_time)   payload.end_time   = toUTCString(payload.end_time)   ?? undefined;
 
         const allowedKeys = ['id', 'user_id', 'type', 'title', 'description', 'start_time', 'end_time', 'is_all_day', 'location', 'priority', 'status', 'repetition_rule', 'tags', 'metadata', 'project_id'];
         Object.keys(payload).forEach(key => { if (!allowedKeys.includes(key)) delete (payload as Record<string, unknown>)[key]; });
