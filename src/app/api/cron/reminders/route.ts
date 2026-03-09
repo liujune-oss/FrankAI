@@ -7,7 +7,8 @@ export const maxDuration = 30;
 
 // 由 cron-job.org 每5分钟调用一次
 // 请求需带 ?secret=xxx，与 app_config 中 cron_secret 一致
-export async function POST(req: NextRequest) {
+// 同时支持 GET 和 POST（cron-job.org 默认发 GET）
+async function handler(req: NextRequest) {
     const secret = req.nextUrl.searchParams.get('secret');
     const configSecret = await getConfig<string>('cron_secret');
 
@@ -138,3 +139,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ sent, failures: failures.length ? failures : undefined });
 }
+
+export const GET = handler;
+export const POST = handler;
