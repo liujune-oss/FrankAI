@@ -10,25 +10,26 @@ async function getUserId(req: NextRequest): Promise<string | null> {
     return payload.uid as string;
 }
 
+// ─── 注意：conversations 表时间字段为 BIGINT（Unix 毫秒），不是 timestamptz ───
 // GET: 增量拉取
-// ?since=ISO_timestamp → 只返回 updated_at > since 的记录（含墓碑）
+// ?since=ISO_timestamp → 转为 ms 后过滤 updated_at > sinceMs
 // 不传 since → 全量拉取
-// 响应包含 serverTime，客户端用它作为下次 since，避免时钟偏差
+// 响应包含 serverTime（ISO），客户端存为下次 since
 export async function GET(req: NextRequest) {
     const userId = await getUserId(req);
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (!supabaseAdmin) return NextResponse.json({ error: "DB unavailable" }, { status: 503 });
 
-    const since = req.nextUrl.searchParams.get("since");
+    const sinceRaw = req.nextUrl.searchParams.get("since");
+    const sinceMs = sinceRaw ? new Date(sinceRaw).getTime() : null;
 
-    // 优先尝试含 deleted_at 的查询（需要迁移已执行）
     let query = supabaseAdmin
         .from("conversations")
         .select("id, title, messages, created_at, updated_at, deleted_at")
         .eq("user_id", userId)
         .order("updated_at", { ascending: false });
 
-    if (since) query = query.gt("updated_at", since);
+    if (sinceMs) query = query.gt("updated_at", sinceMs);
 
     let result = await query;
 
@@ -39,20 +40,21 @@ export async function GET(req: NextRequest) {
             .select("id, title, messages, created_at, updated_at")
             .eq("user_id", userId)
             .order("updated_at", { ascending: false });
-        result = (since ? await fallback.gt("updated_at", since) : await fallback) as typeof result;
+        result = (sinceMs ? await fallback.gt("updated_at", sinceMs) : await fallback) as typeof result;
     }
 
     const { data, error } = result;
-
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     const conversations = (data ?? []).map((row: Record<string, unknown>) => ({
         id: row.id,
         title: (row.title as string) ?? "",
         messages: (row.messages as unknown[]) ?? [],
-        createdAt: new Date(row.created_at as string).getTime(),
-        updatedAt: new Date(row.updated_at as string).getTime(),
-        deletedAt: row.deleted_at ? new Date(row.deleted_at as string).getTime() : null,
+        createdAt: row.created_at as number,          // BIGINT → 直接用
+        updatedAt: row.updated_at as number,          // BIGINT → 直接用
+        deletedAt: row.deleted_at                     // timestamptz → 转 ms
+            ? new Date(row.deleted_at as string).getTime()
+            : null,
     }));
 
     return NextResponse.json({
@@ -62,7 +64,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST: 写入/更新一条对话（upsert）
-// updated_at 由服务器生成，不信任客户端时钟
+// updated_at 用服务器当前时间（ms），避免客户端时钟偏差
 export async function POST(req: NextRequest) {
     const userId = await getUserId(req);
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -72,25 +74,22 @@ export async function POST(req: NextRequest) {
     const conv = body?.conversation;
     if (!conv?.id) return NextResponse.json({ error: "Invalid" }, { status: 400 });
 
-    const now = new Date().toISOString();
+    const nowMs = Date.now();
 
-    // 不带 deleted_at（DB 默认 NULL，兼容迁移未执行的情况）
-    // 若记录曾被标记为墓碑，需在此处显式清除；待迁移确认执行后可追加 deleted_at: null
-    const upsertPayload: Record<string, unknown> = {
-        id: conv.id,
-        user_id: userId,
-        title: conv.title ?? "新会话",
-        messages: conv.messages ?? [],
-        created_at: conv.createdAt ? new Date(conv.createdAt).toISOString() : now,
-        updated_at: now,
-    };
-
-    const { error } = await supabaseAdmin
-        .from("conversations")
-        .upsert(upsertPayload, { onConflict: "id" });
+    const { error } = await supabaseAdmin.from("conversations").upsert(
+        {
+            id: conv.id,
+            user_id: userId,
+            title: conv.title ?? "新会话",
+            messages: conv.messages ?? [],
+            created_at: conv.createdAt ?? nowMs,   // BIGINT ms
+            updated_at: nowMs,                     // BIGINT ms，服务器时间
+        },
+        { onConflict: "id" }
+    );
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, updatedAt: new Date(now).getTime() });
+    return NextResponse.json({ ok: true, updatedAt: nowMs });
 }
 
 // DELETE: 单条写墓碑 / 全部真删
@@ -101,7 +100,7 @@ export async function DELETE(req: NextRequest) {
 
     const body = await req.json();
 
-    // 全部清空 → 用户主动操作，真删（不留墓碑）
+    // 全部清空 → 真删
     if (body?.all === true) {
         const { error } = await supabaseAdmin
             .from("conversations")
@@ -114,14 +113,28 @@ export async function DELETE(req: NextRequest) {
     const id = body?.id;
     if (!id) return NextResponse.json({ error: "Invalid" }, { status: 400 });
 
-    const now = new Date().toISOString();
+    const nowMs = Date.now();
 
-    // 真删（待迁移执行后可改为写墓碑：update deleted_at/updated_at/title/messages）
-    const { error } = await supabaseAdmin
+    // 写墓碑：deleted_at 为 timestamptz，updated_at 为 BIGINT ms
+    let { error } = await supabaseAdmin
         .from("conversations")
-        .delete()
+        .update({
+            deleted_at: new Date(nowMs).toISOString(),  // timestamptz
+            updated_at: nowMs,                           // BIGINT ms
+            title: "",
+            messages: [],
+        })
         .eq("id", id)
         .eq("user_id", userId);
+
+    // deleted_at 列不存在时降级为真删
+    if (error && error.message?.includes("deleted_at")) {
+        ({ error } = await supabaseAdmin
+            .from("conversations")
+            .delete()
+            .eq("id", id)
+            .eq("user_id", userId));
+    }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
