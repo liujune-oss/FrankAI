@@ -53,6 +53,7 @@ function patchCache(id: string, updated: Activity | null) {
             ? arr.map(a => a.id === id ? updated : a)
             : arr.filter(a => a.id !== id);
         localStorage.setItem('activities_cache', JSON.stringify(next));
+        window.dispatchEvent(new Event('activities_cache_updated'));
     } catch { }
 }
 

@@ -38,6 +38,18 @@ export function useActivities() {
     });
     const [error, setError] = useState<string | null>(null);
 
+    // 监听其他页面（如详情页）修改 cache 后发出的通知，同步 state
+    useEffect(() => {
+        const handler = () => {
+            try {
+                const cached = localStorage.getItem('activities_cache');
+                if (cached) setActivities(JSON.parse(cached));
+            } catch {}
+        };
+        window.addEventListener('activities_cache_updated', handler);
+        return () => window.removeEventListener('activities_cache_updated', handler);
+    }, []);
+
     const fetchActivities = useCallback(async (params?: { type?: string; status?: string; start?: string; end?: string; force?: boolean }) => {
         if (!auth.isActivated) return;
 
