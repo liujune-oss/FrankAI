@@ -67,6 +67,8 @@ export default function AdminDashboard() {
     const [voiceIntentModel, setVoiceIntentModel] = useState('');
     const [memoryEmbeddingModel, setMemoryEmbeddingModel] = useState('');
     const [imageGenModel, setImageGenModel] = useState('');
+    const [dingtalkWebhook, setDingtalkWebhook] = useState('');
+    const [cronSecret, setCronSecret] = useState('');
     const [configLoading, setConfigLoading] = useState(true);
     const [configSaving, setConfigSaving] = useState(false);
     const [configDirty, setConfigDirty] = useState(false);
@@ -147,6 +149,8 @@ export default function AdminDashboard() {
                 setVoiceIntentModel(c.voice_intent_model || '');
                 setMemoryEmbeddingModel(c.memory_embedding_model || '');
                 setImageGenModel(c.image_gen_model || '');
+                setDingtalkWebhook(c.dingtalk_webhook_url || '');
+                setCronSecret(c.cron_secret || '');
                 setConfigDirty(false);
             }
         } catch { }
@@ -279,6 +283,8 @@ export default function AdminDashboard() {
                 { key: 'voice_intent_model', value: voiceIntentModel },
                 { key: 'memory_embedding_model', value: memoryEmbeddingModel },
                 { key: 'image_gen_model', value: imageGenModel },
+                { key: 'dingtalk_webhook_url', value: dingtalkWebhook },
+                { key: 'cron_secret', value: cronSecret },
             ];
             for (const u of updates) {
                 const res = await fetch('/api/admin/config', {
@@ -675,6 +681,7 @@ export default function AdminDashboard() {
                                         ? apiModels.map(m => ({ id: m.id, label: m.displayName || m.id }))
                                         : chatModels.map(m => ({ id: m.id, label: m.label }));
                                     return (
+                                        <>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div className="space-y-2">
                                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">默认聊天模型</label>
@@ -718,6 +725,44 @@ export default function AdminDashboard() {
                                                 </select>
                                             </div>
                                         </div>
+
+                                        {/* 钉钉提醒配置 */}
+                                        <div className="pt-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
+                                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">🔔 钉钉提醒</h3>
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">群机器人 Webhook URL</label>
+                                                <input
+                                                    type="text"
+                                                    value={dingtalkWebhook}
+                                                    onChange={e => { setDingtalkWebhook(e.target.value); setConfigDirty(true); }}
+                                                    placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
+                                                    className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Cron Secret（保护接口的随机密钥）</label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={cronSecret}
+                                                        onChange={e => { setCronSecret(e.target.value); setConfigDirty(true); }}
+                                                        placeholder="填任意随机字符串，如 abc123xyz"
+                                                        className="flex-1 px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                                                    />
+                                                    <button
+                                                        onClick={() => { setCronSecret(Math.random().toString(36).slice(2, 18)); setConfigDirty(true); }}
+                                                        className="px-3 py-2 text-xs bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors whitespace-nowrap"
+                                                    >随机生成</button>
+                                                </div>
+                                                {cronSecret && (
+                                                    <p className="text-xs text-gray-500 font-mono break-all">
+                                                        cron-job.org 填写地址：<br />
+                                                        POST {typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'}/api/cron/reminders?secret={cronSecret}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        </>
                                     );
                                 })()}
                             </>
