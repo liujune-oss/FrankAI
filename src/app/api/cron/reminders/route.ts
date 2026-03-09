@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHmac } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getConfig } from '@/lib/config';
 
@@ -22,6 +23,9 @@ export async function POST(req: NextRequest) {
     if (!webhookUrl) {
         return NextResponse.json({ skipped: true, reason: 'dingtalk_webhook_url not configured' });
     }
+
+    // 加签密钥（可选）
+    const signSecret = await getConfig<string>('dingtalk_sign_secret');
 
     // 查找5分钟内到期的提醒（start_time 在 now-5min ~ now+30s 之间）
     const now = new Date();
@@ -64,8 +68,19 @@ export async function POST(req: NextRequest) {
             reminder.description ? `📝 ${reminder.description}` : '',
         ].filter(Boolean).join('\n');
 
+        // 构建带加签的 URL（如果配置了加签密钥）
+        let sendUrl = webhookUrl;
+        if (signSecret) {
+            const timestamp = Date.now().toString();
+            const stringToSign = `${timestamp}\n${signSecret}`;
+            const hmac = createHmac('sha256', signSecret);
+            hmac.update(stringToSign, 'utf8');
+            const sign = encodeURIComponent(hmac.digest('base64'));
+            sendUrl = `${webhookUrl}&timestamp=${timestamp}&sign=${sign}`;
+        }
+
         try {
-            const res = await fetch(webhookUrl, {
+            const res = await fetch(sendUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
