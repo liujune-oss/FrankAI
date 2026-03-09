@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, KeyRound, MonitorSmartphone, Ban, ShieldCheck, LogOut, Loader2, RefreshCw, Settings, Cpu, Plus, Trash2, Save, Download, BrainCircuit, ChevronDown, ChevronRight, Beaker } from 'lucide-react';
+import { Users, KeyRound, MonitorSmartphone, Ban, ShieldCheck, LogOut, Loader2, RefreshCw, Settings, Cpu, Plus, Trash2, Save, Download, BrainCircuit, ChevronDown, ChevronRight, Beaker, Bell } from 'lucide-react';
+import versionInfo from '../../../version.json';
 
 type ChatModel = {
     id: string;
@@ -54,7 +55,7 @@ export default function AdminDashboard() {
     const [newUsername, setNewUsername] = useState('');
     const [newMaxUses, setNewMaxUses] = useState(3);
     const [isCreating, setIsCreating] = useState(false);
-    const [activeTab, setActiveTab] = useState<'users' | 'models' | 'memories' | 'chat_logs'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'models' | 'memories' | 'chat_logs' | 'settings'>('users');
 
     // Local toggles
     const [sandboxEnabled, setSandboxEnabled] = useState(false);
@@ -106,6 +107,7 @@ export default function AdminDashboard() {
         if (activeTab === 'models') fetchConfig();
         if (activeTab === 'memories') fetchAdminMemories();
         if (activeTab === 'chat_logs') fetchAdminChatLogs();
+        if (activeTab === 'settings') fetchConfig();
     }, [activeTab]);
 
     const fetchUsers = async () => {
@@ -451,7 +453,12 @@ export default function AdminDashboard() {
                             <ShieldCheck className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold">Admin Central</h1>
+                            <h1 className="text-2xl font-bold flex items-center gap-2">
+                                Admin Central
+                                <span className="text-xs font-mono px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-full">
+                                    v{versionInfo.major}.{versionInfo.minor}.{versionInfo.build}
+                                </span>
+                            </h1>
                             <p className="text-sm text-gray-500 dark:text-gray-400">Manage users, models, and configurations</p>
                         </div>
                     </div>
@@ -471,6 +478,7 @@ export default function AdminDashboard() {
                             if (activeTab === 'models') fetchConfig();
                             if (activeTab === 'memories') fetchAdminMemories();
                             if (activeTab === 'chat_logs') fetchAdminChatLogs();
+                            if (activeTab === 'settings') fetchConfig();
                         }} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
                             <RefreshCw className="w-5 h-5" />
                         </button>
@@ -523,6 +531,15 @@ export default function AdminDashboard() {
                             }`}
                     >
                         <MonitorSmartphone className="w-4 h-4" /> 原始聊天记录
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('settings')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'settings'
+                            ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50 dark:bg-blue-900/10 dark:text-blue-400'
+                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                            }`}
+                    >
+                        <Settings className="w-4 h-4" /> 系统设置
                     </button>
                 </div>
 
@@ -681,7 +698,6 @@ export default function AdminDashboard() {
                                         ? apiModels.map(m => ({ id: m.id, label: m.displayName || m.id }))
                                         : chatModels.map(m => ({ id: m.id, label: m.label }));
                                     return (
-                                        <>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div className="space-y-2">
                                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">默认聊天模型</label>
@@ -725,47 +741,76 @@ export default function AdminDashboard() {
                                                 </select>
                                             </div>
                                         </div>
-
-                                        {/* 钉钉提醒配置 */}
-                                        <div className="pt-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
-                                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">🔔 钉钉提醒</h3>
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">群机器人 Webhook URL</label>
-                                                <input
-                                                    type="text"
-                                                    value={dingtalkWebhook}
-                                                    onChange={e => { setDingtalkWebhook(e.target.value); setConfigDirty(true); }}
-                                                    placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
-                                                    className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Cron Secret（保护接口的随机密钥）</label>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        value={cronSecret}
-                                                        onChange={e => { setCronSecret(e.target.value); setConfigDirty(true); }}
-                                                        placeholder="填任意随机字符串，如 abc123xyz"
-                                                        className="flex-1 px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                                                    />
-                                                    <button
-                                                        onClick={() => { setCronSecret(Math.random().toString(36).slice(2, 18)); setConfigDirty(true); }}
-                                                        className="px-3 py-2 text-xs bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors whitespace-nowrap"
-                                                    >随机生成</button>
-                                                </div>
-                                                {cronSecret && (
-                                                    <p className="text-xs text-gray-500 font-mono break-all">
-                                                        cron-job.org 填写地址：<br />
-                                                        POST {typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'}/api/cron/reminders?secret={cronSecret}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                        </>
                                     );
                                 })()}
                             </>
+                        )}
+                    </section>
+                )}
+
+                {activeTab === 'settings' && (
+                    <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-semibold flex items-center gap-2">
+                                <Bell className="w-5 h-5 text-blue-500" /> 系统设置
+                            </h2>
+                            {configDirty && (
+                                <button
+                                    onClick={handleSaveConfig}
+                                    disabled={configSaving}
+                                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    {configSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                                    保存配置
+                                </button>
+                            )}
+                        </div>
+
+                        {configLoading ? (
+                            <div className="flex justify-center py-8">
+                                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                {/* 钉钉提醒配置 */}
+                                <div className="space-y-4">
+                                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                                        🔔 钉钉群机器人提醒
+                                    </h3>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">群机器人 Webhook URL</label>
+                                        <input
+                                            type="text"
+                                            value={dingtalkWebhook}
+                                            onChange={e => { setDingtalkWebhook(e.target.value); setConfigDirty(true); }}
+                                            placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
+                                            className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Cron Secret（保护接口的随机密钥）</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={cronSecret}
+                                                onChange={e => { setCronSecret(e.target.value); setConfigDirty(true); }}
+                                                placeholder="填任意随机字符串，如 abc123xyz"
+                                                className="flex-1 px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                                            />
+                                            <button
+                                                onClick={() => { setCronSecret(Math.random().toString(36).slice(2, 18)); setConfigDirty(true); }}
+                                                className="px-3 py-2 text-xs bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors whitespace-nowrap"
+                                            >随机生成</button>
+                                        </div>
+                                        {cronSecret && (
+                                            <p className="text-xs text-gray-500 font-mono break-all bg-gray-50 dark:bg-gray-900 p-3 rounded-lg">
+                                                cron-job.org 填写地址：<br />
+                                                POST {typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'}/api/cron/reminders?secret={cronSecret}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </section>
                 )}
