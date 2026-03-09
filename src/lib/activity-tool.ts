@@ -69,6 +69,12 @@ export async function executeUpsertActivity(args: UpsertActivityArgs, userId: st
         delete payload.summary;
         if (!payload.title || typeof payload.title !== 'string' || payload.title.trim() === '') payload.title = 'Untitled Activity';
         if (!payload.type) payload.type = (payload.start_time && payload.end_time) ? 'event' : 'task';
+
+        // 先转 UTC（AI 输出本地时间无时区后缀 → 视为 +08:00）
+        // 必须在时间补算之前执行，否则补算出的 end_time 会带 Z 跳过转换
+        if (payload.start_time) payload.start_time = toUTCString(payload.start_time) ?? undefined;
+        if (payload.end_time)   payload.end_time   = toUTCString(payload.end_time)   ?? undefined;
+
         if (payload.type === 'task' && !payload.end_time && payload.start_time) {
             payload.end_time = payload.start_time;
             payload.start_time = null;
@@ -85,10 +91,6 @@ export async function executeUpsertActivity(args: UpsertActivityArgs, userId: st
                 payload.end_time = undefined;
             }
         }
-
-        // 统一转 UTC（AI 输出本地时间，无时区后缀 → 视为 +08:00）
-        if (payload.start_time) payload.start_time = toUTCString(payload.start_time) ?? undefined;
-        if (payload.end_time)   payload.end_time   = toUTCString(payload.end_time)   ?? undefined;
 
         const allowedKeys = ['id', 'user_id', 'type', 'title', 'description', 'start_time', 'end_time', 'is_all_day', 'location', 'priority', 'status', 'repetition_rule', 'tags', 'metadata', 'project_id'];
         Object.keys(payload).forEach(key => { if (!allowedKeys.includes(key)) delete (payload as Record<string, unknown>)[key]; });
