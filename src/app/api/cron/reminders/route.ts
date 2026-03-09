@@ -27,6 +27,10 @@ async function handler(req: NextRequest) {
     }
 
     const signSecret = await getConfig<string>('dingtalk_sign_secret');
+    const reminderUserId = await getConfig<string>('dingtalk_reminder_user_id');
+    if (!reminderUserId) {
+        return NextResponse.json({ skipped: true, reason: 'dingtalk_reminder_user_id not configured' });
+    }
 
     const now = new Date();
     const nowMs = now.getTime();
@@ -44,6 +48,7 @@ async function handler(req: NextRequest) {
     const { data: reminders10, error: err10 } = await supabaseAdmin
         .from('activities')
         .select('id, title, description, start_time, type')
+        .eq('user_id', reminderUserId)
         .neq('status', 'completed')
         .neq('status', 'cancelled')
         .gte('start_time', w10Start)
@@ -52,6 +57,7 @@ async function handler(req: NextRequest) {
     const { data: reminders5, error: err5 } = await supabaseAdmin
         .from('activities')
         .select('id, title, description, start_time, type')
+        .eq('user_id', reminderUserId)
         .neq('status', 'completed')
         .neq('status', 'cancelled')
         .gte('start_time', w5Start)

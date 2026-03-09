@@ -70,6 +70,7 @@ export default function AdminDashboard() {
     const [imageGenModel, setImageGenModel] = useState('');
     const [dingtalkWebhook, setDingtalkWebhook] = useState('');
     const [dingtalkSignSecret, setDingtalkSignSecret] = useState('');
+    const [dingtalkReminderUserId, setDingtalkReminderUserId] = useState('');
     const [cronSecret, setCronSecret] = useState('');
     const [configLoading, setConfigLoading] = useState(true);
     const [configSaving, setConfigSaving] = useState(false);
@@ -154,6 +155,7 @@ export default function AdminDashboard() {
                 setImageGenModel(c.image_gen_model || '');
                 setDingtalkWebhook(c.dingtalk_webhook_url || '');
                 setDingtalkSignSecret(c.dingtalk_sign_secret || '');
+                setDingtalkReminderUserId(c.dingtalk_reminder_user_id || '');
                 setCronSecret(c.cron_secret || '');
                 setConfigDirty(false);
             }
@@ -289,6 +291,7 @@ export default function AdminDashboard() {
                 { key: 'image_gen_model', value: imageGenModel },
                 { key: 'dingtalk_webhook_url', value: dingtalkWebhook },
                 { key: 'dingtalk_sign_secret', value: dingtalkSignSecret },
+                { key: 'dingtalk_reminder_user_id', value: dingtalkReminderUserId },
                 { key: 'cron_secret', value: cronSecret },
             ];
             for (const u of updates) {
@@ -801,6 +804,21 @@ export default function AdminDashboard() {
                                             placeholder="SEC开头的密钥字符串"
                                             className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                                         />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            提醒用户 <span className="text-xs text-gray-400 font-normal">（只提醒该用户名下的活动）</span>
+                                        </label>
+                                        <select
+                                            value={dingtalkReminderUserId}
+                                            onChange={e => { setDingtalkReminderUserId(e.target.value); setConfigDirty(true); }}
+                                            className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">— 选择用户 —</option>
+                                            {users.map(u => (
+                                                <option key={u.id} value={u.id}>{u.username} ({u.id.slice(0, 8)}…)</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Cron Secret（保护接口的随机密钥）</label>
