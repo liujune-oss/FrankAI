@@ -44,7 +44,6 @@ async function handler(req: NextRequest) {
     const { data: reminders10, error: err10 } = await supabaseAdmin
         .from('activities')
         .select('id, title, description, start_time, type')
-        .eq('type', 'reminder')
         .neq('status', 'completed')
         .neq('status', 'cancelled')
         .gte('start_time', w10Start)
@@ -53,7 +52,6 @@ async function handler(req: NextRequest) {
     const { data: reminders5, error: err5 } = await supabaseAdmin
         .from('activities')
         .select('id, title, description, start_time, type')
-        .eq('type', 'reminder')
         .neq('status', 'completed')
         .neq('status', 'cancelled')
         .gte('start_time', w5Start)
