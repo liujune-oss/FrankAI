@@ -9,6 +9,7 @@ export const maxDuration = 30;
 // 请求需带 ?secret=xxx，与 app_config 中 cron_secret 一致
 // 同时支持 GET 和 POST（cron-job.org 默认发 GET）
 async function handler(req: NextRequest) {
+    try {
     const secret = req.nextUrl.searchParams.get('secret');
     const configSecret = await getConfig<string>('cron_secret');
 
@@ -138,6 +139,10 @@ async function handler(req: NextRequest) {
     }
 
     return NextResponse.json({ sent, failures: failures.length ? failures : undefined });
+    } catch (e: any) {
+        console.error('[cron/reminders] Unhandled error:', e);
+        return NextResponse.json({ error: e?.message ?? String(e) }, { status: 500 });
+    }
 }
 
 export const GET = handler;
