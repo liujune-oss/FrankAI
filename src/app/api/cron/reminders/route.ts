@@ -28,114 +28,93 @@ async function handler(req: NextRequest) {
 
     const signSecret = await getConfig<string>('dingtalk_sign_secret');
 
-    // 查找未来 11 分钟内 + 过去 1 分钟内的提醒（覆盖 10min 和 5min 两个窗口）
     const now = new Date();
     const nowMs = now.getTime();
-    const windowStart = new Date(nowMs - 1 * 60 * 1000).toISOString();
-    const windowEnd = new Date(nowMs + 11 * 60 * 1000).toISOString();
+    const BUFFER = 30 * 1000; // ±30秒容错窗口
 
-    const { data: reminders, error } = await supabaseAdmin
+    // 10分钟提醒窗口：start_time 在 now+9.5min ~ now+10.5min
+    const w10Start = new Date(nowMs + 9.5 * 60 * 1000).toISOString();
+    const w10End   = new Date(nowMs + 10.5 * 60 * 1000).toISOString();
+
+    // 5分钟提醒窗口：start_time 在 now+4.5min ~ now+5.5min
+    const w5Start  = new Date(nowMs + 4.5 * 60 * 1000).toISOString();
+    const w5End    = new Date(nowMs + 5.5 * 60 * 1000).toISOString();
+
+    // 查两个窗口合并（用 or 逻辑在应用层区分）
+    const { data: reminders10, error: err10 } = await supabaseAdmin
         .from('activities')
-        .select('id, title, description, start_time, end_time, type, metadata')
+        .select('id, title, description, start_time, type')
         .eq('type', 'reminder')
         .neq('status', 'completed')
         .neq('status', 'cancelled')
-        .gte('start_time', windowStart)
-        .lte('start_time', windowEnd);
+        .gte('start_time', w10Start)
+        .lte('start_time', w10End);
 
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    const { data: reminders5, error: err5 } = await supabaseAdmin
+        .from('activities')
+        .select('id, title, description, start_time, type')
+        .eq('type', 'reminder')
+        .neq('status', 'completed')
+        .neq('status', 'cancelled')
+        .gte('start_time', w5Start)
+        .lte('start_time', w5End);
+
+    if (err10 || err5) {
+        return NextResponse.json({ error: (err10 || err5)?.message }, { status: 500 });
     }
 
-    if (!reminders || reminders.length === 0) {
-        return NextResponse.json({ sent: 0 });
-    }
-
-    let sent = 0;
-    const failures: string[] = [];
-
-    for (const reminder of reminders) {
-        const meta = (reminder.metadata as Record<string, unknown>) ?? {};
-        const startMs = new Date(reminder.start_time as string).getTime();
-        const diffMin = (startMs - nowMs) / 60000; // 距离开始还有多少分钟（负数=已过）
-
-        // 10分钟提醒：距离开始 5~11 分钟
-        const need10 = diffMin >= 5 && diffMin < 11 && !meta.dingtalk_sent_10min && !meta.dingtalk_sent;
-        // 5分钟提醒：距离开始 -1~6 分钟
-        const need5 = diffMin >= -1 && diffMin < 6 && !meta.dingtalk_sent_5min && !meta.dingtalk_sent;
-
-        if (!need10 && !need5) continue;
-
+    // 发送钉钉消息
+    const sendDingTalk = async (reminder: any, label: string): Promise<boolean> => {
         const timeStr = reminder.start_time
-            ? new Date(reminder.start_time as string).toLocaleString('zh-CN', {
+            ? new Date(reminder.start_time).toLocaleString('zh-CN', {
                 timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit'
             })
             : '';
 
-        // 发送单条提醒
-        const sendDingTalk = async (label: string): Promise<boolean> => {
-            const text = [
-                `⏰ **${label}提醒**`,
-                `📌 ${reminder.title}`,
-                timeStr ? `🕐 ${timeStr}` : '',
-                reminder.description ? `📝 ${reminder.description}` : '',
-            ].filter(Boolean).join('\n');
+        const text = [
+            `⏰ **${label}提醒**`,
+            `📌 ${reminder.title}`,
+            timeStr ? `🕐 ${timeStr}` : '',
+            reminder.description ? `📝 ${reminder.description}` : '',
+        ].filter(Boolean).join('\n');
 
-            let sendUrl = webhookUrl;
-            if (signSecret) {
-                const timestamp = Date.now().toString();
-                const stringToSign = `${timestamp}\n${signSecret}`;
-                const hmac = createHmac('sha256', signSecret);
-                hmac.update(stringToSign, 'utf8');
-                const sign = encodeURIComponent(hmac.digest('base64'));
-                sendUrl = `${webhookUrl}&timestamp=${timestamp}&sign=${sign}`;
-            }
-
-            const res = await fetch(sendUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    msgtype: 'markdown',
-                    markdown: { title: `${label}提醒：${reminder.title}`, text },
-                }),
-            });
-
-            if (!res.ok) {
-                const body = await res.text();
-                failures.push(`${reminder.id}(${label}): ${res.status} ${body}`);
-                return false;
-            }
-            return true;
-        };
-
-        try {
-            if (need10) {
-                const ok = await sendDingTalk('10分钟');
-                if (ok) {
-                    await supabaseAdmin.from('activities').update({
-                        metadata: { ...meta, dingtalk_sent_10min: true, dingtalk_sent_10min_at: now.toISOString() }
-                    }).eq('id', reminder.id);
-                    sent++;
-                }
-            }
-
-            if (need5) {
-                // 读取最新 meta（可能刚被 10min 写入更新过）
-                const { data: fresh } = await supabaseAdmin
-                    .from('activities').select('metadata').eq('id', reminder.id).single();
-                const freshMeta = (fresh?.metadata as Record<string, unknown>) ?? meta;
-
-                const ok = await sendDingTalk('5分钟');
-                if (ok) {
-                    await supabaseAdmin.from('activities').update({
-                        metadata: { ...freshMeta, dingtalk_sent_5min: true, dingtalk_sent_5min_at: now.toISOString() }
-                    }).eq('id', reminder.id);
-                    sent++;
-                }
-            }
-        } catch (e: any) {
-            failures.push(`${reminder.id}: ${e.message}`);
+        let sendUrl = webhookUrl;
+        if (signSecret) {
+            const timestamp = Date.now().toString();
+            const stringToSign = `${timestamp}\n${signSecret}`;
+            const hmac = createHmac('sha256', signSecret);
+            hmac.update(stringToSign, 'utf8');
+            const sign = encodeURIComponent(hmac.digest('base64'));
+            sendUrl = `${webhookUrl}&timestamp=${timestamp}&sign=${sign}`;
         }
+
+        const res = await fetch(sendUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                msgtype: 'markdown',
+                markdown: { title: `${label}提醒：${reminder.title}`, text },
+            }),
+        });
+
+        return res.ok;
+    };
+
+    let sent = 0;
+    const failures: string[] = [];
+
+    for (const r of reminders10 ?? []) {
+        try {
+            const ok = await sendDingTalk(r, '10分钟');
+            if (ok) sent++; else failures.push(`${r.id}(10min)`);
+        } catch (e: any) { failures.push(`${r.id}: ${e.message}`); }
+    }
+
+    for (const r of reminders5 ?? []) {
+        try {
+            const ok = await sendDingTalk(r, '5分钟');
+            if (ok) sent++; else failures.push(`${r.id}(5min)`);
+        } catch (e: any) { failures.push(`${r.id}: ${e.message}`); }
     }
 
     return NextResponse.json({ sent, failures: failures.length ? failures : undefined });
