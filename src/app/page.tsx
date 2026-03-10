@@ -206,6 +206,8 @@ export default function ChatPage() {
         isImageGenerating={chat.isImageGenerating}
         thinkingText={chat.thinkingText}
         error={chat.error}
+        onEditMessage={chat.editAndResend}
+        onRegenerateMessage={chat.regenerateFrom}
       />
 
       <InputBar

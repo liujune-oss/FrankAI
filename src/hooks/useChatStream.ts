@@ -134,7 +134,6 @@ export function useChatStream({
         e.target.value = '';
     }, []);
 
-
     // Stop generation
     const stopGeneration = useCallback(() => {
         abortControllerRef.current?.abort();
@@ -145,48 +144,26 @@ export function useChatStream({
         setThinkingText("");
     }, []);
 
-    // Send message
-    const sendMessage = useCallback(async (text: string, userHasScrolledUp: React.MutableRefObject<boolean>) => {
-        if ((!text.trim() && pendingImages.length === 0) || isLoading) return;
-        setIsLoading(true);
-        setIsThinking(true);
-        setThinkingText("");
-        setError(null);
-        setDebugEvents([]);
-        userHasScrolledUp.current = false;
-
-        let progressInterval: NodeJS.Timeout | null = null;
-
-        const currentImages = [...pendingImages];
-        setPendingImages([]);
-
-        const userMessage: ChatMessage = {
-            id: Date.now().toString(),
-            role: "user",
-            parts: [{ type: "text", text }],
-            images: currentImages.length > 0 ? currentImages : undefined,
-        };
-
-        const newMessages = [...messages, userMessage];
-        setMessages(newMessages);
-
+    // Core streaming logic — used by sendMessage, editAndResend, regenerateFrom
+    const runStream = useCallback(async (
+        messagesToSend: ChatMessage[],
+        currentImages: { data: string; mimeType: string }[] = [],
+    ) => {
         const controller = new AbortController();
         abortControllerRef.current = controller;
 
         try {
             // Build messages for the chat API
-            const coreMessages = newMessages.map((m: ChatMessage) => {
+            const coreMessages = messagesToSend.map((m: ChatMessage) => {
                 const contentParts: any[] = [];
                 const textContent = m.parts?.map((p: any) => p.text).filter(Boolean).join("\n") || "";
                 if (textContent) contentParts.push({ type: 'text', text: textContent });
                 if (m.images && m.images.length > 0) {
                     if (m.role === 'user') {
-                        // Send user-uploaded images as-is
                         m.images.forEach((img) => {
                             contentParts.push({ type: 'image', image: img.data, mimeType: img.mimeType });
                         });
                     } else {
-                        // For assistant-generated images, use text placeholder to avoid huge payloads
                         contentParts.push({ type: 'text', text: `[Generated ${m.images.length} image(s)]` });
                     }
                 }
@@ -209,21 +186,16 @@ export function useChatStream({
                     throw new Error('请求过于频繁，请稍后再试（每分钟最多 10 次）');
                 }
 
-                // Try parsing backend JSON error to surface exact Gemini exceptions
                 let backendMsg = `HTTP Error: ${response.status}`;
                 try {
                     const errPayload = await response.json();
-                    if (errPayload && errPayload.error) {
-                        backendMsg = errPayload.error;
-                    }
-                } catch (e) {
-                    // Fallback to reading text if not JSON
+                    if (errPayload && errPayload.error) backendMsg = errPayload.error;
+                } catch {
                     try {
                         const errText = await response.text();
                         if (errText) backendMsg = errText;
-                    } catch (e2) { }
+                    } catch { }
                 }
-
                 throw new Error(backendMsg);
             }
 
@@ -238,7 +210,7 @@ export function useChatStream({
                 thinking: "",
             };
 
-            const withAssistant = [...newMessages, assistantMessage];
+            const withAssistant = [...messagesToSend, assistantMessage];
             setMessages(withAssistant);
 
             let done = false;
@@ -260,9 +232,7 @@ export function useChatStream({
                             if (raw === "[DONE]") continue;
                             try {
                                 const payload = JSON.parse(raw);
-                                // New SDK v6 format: type-based events
                                 if (payload.type === "text-start") {
-                                    // Marks the beginning of a new text part; exit thinking mode
                                     if (!hasStartedText) {
                                         hasStartedText = true;
                                         setIsThinking(false);
@@ -284,7 +254,7 @@ export function useChatStream({
                                     const toolLog = `🔧 [工具调用] ${payload.toolName}\n参数: ${JSON.stringify(payload.args, null, 2)}`;
                                     setDebugEvents(prev => [...prev, toolLog]);
                                     if (payload.toolName === "generate_image") {
-                                        toolCallDetected = payload.args || { prompt: text };
+                                        toolCallDetected = payload.args || { prompt: '' };
                                     }
                                 } else if (payload.type === "tool-result") {
                                     const resultLog = `✅ [工具结果] ${payload.toolName}\n结果: ${JSON.stringify(payload.result)}`;
@@ -299,14 +269,9 @@ export function useChatStream({
                                     throw new Error(payload.errorText);
                                 }
                             } catch (e: any) {
-                                if (
-                                    e?.message?.startsWith("HTTP") ||
-                                    e?.message?.includes("error")
-                                )
-                                    throw e;
+                                if (e?.message?.startsWith("HTTP") || e?.message?.includes("error")) throw e;
                             }
                         } else if (line.startsWith("0:")) {
-                            // Legacy SDK format
                             try {
                                 const delta = JSON.parse(line.substring(2));
                                 if (!hasStartedText) {
@@ -314,15 +279,14 @@ export function useChatStream({
                                     setIsThinking(false);
                                 }
                                 streamedContent += delta;
-                            } catch (e) { }
+                            } catch { }
                         } else if (line.startsWith("9:")) {
-                            // Legacy Tool call format: 9:{"toolCallId":...,"toolName":"generate_image","args":{...}}
                             try {
                                 const toolCall = JSON.parse(line.substring(2));
                                 if (toolCall.toolName === "generate_image") {
-                                    toolCallDetected = toolCall.args || { prompt: text };
+                                    toolCallDetected = toolCall.args || { prompt: '' };
                                 }
-                            } catch (e) { }
+                            } catch { }
                         }
                     }
 
@@ -339,11 +303,9 @@ export function useChatStream({
                 }
             }
 
-            // Fallback: if model output text that looks like a JSON tool call instead of
-            // using the actual tool, try to extract the prompt from it
+            // Fallback: if model output text that looks like a JSON tool call
             if (!toolCallDetected && streamedContent.trim()) {
                 try {
-                    // Match either pure JSON { ... "prompt" ... } or pseudo-syntax [generate_image: { ... "prompt" ... }]
                     const matchPattern = streamedContent.match(/(?:\[generate_image:\s*)?(\{[\s\S]*"(?:action_input|prompt)"[\s\S]*\})/i);
                     const jsonMatch = matchPattern ? matchPattern[1] : null;
                     if (jsonMatch) {
@@ -359,9 +321,7 @@ export function useChatStream({
                                 extractedPrompt = parsed.action_input;
                             }
                         }
-                        if (!extractedPrompt && parsed.prompt) {
-                            extractedPrompt = parsed.prompt;
-                        }
+                        if (!extractedPrompt && parsed.prompt) extractedPrompt = parsed.prompt;
                         if (extractedPrompt) {
                             let action = 'generate';
                             if (parsed.action) action = parsed.action;
@@ -369,36 +329,29 @@ export function useChatStream({
                                 action = parsed.action_input.action;
                             }
                             toolCallDetected = { prompt: extractedPrompt, action };
-                            // Keep any text before the tool as the model's regular response
                             const matchIndex = matchPattern ? matchPattern.index || 0 : 0;
-                            const beforeJson = streamedContent.substring(0, matchIndex).trim();
-                            streamedContent = beforeJson;
+                            streamedContent = streamedContent.substring(0, matchIndex).trim();
                         }
                     }
                 } catch {
-                    // Not valid JSON, that's fine — it's regular text
+                    // Not valid JSON — regular text
                 }
             }
 
             // If a generate_image tool call was detected, call the image generation API
             if (toolCallDetected) {
-                // Remove text thinking, show image skeleton instead
                 setIsThinking(false);
                 setThinkingText("");
                 setIsImageGenerating(true);
 
-                const history = newMessages.slice(0, -1).map((m: ChatMessage) => ({
+                const history = messagesToSend.slice(0, -1).map((m: ChatMessage) => ({
                     role: m.role,
                     text: m.parts?.map((p: any) => p.text).filter(Boolean).join("\n") || "",
                 }));
 
-                // Only send images that the user explicitly uploaded in this request.
-                // We no longer automatically chain previous assistant images to avoid unintended prompt mashups,
-                // unless the user strictly intended to edit the previous image.
                 let imagesToSend = currentImages.length > 0 ? currentImages : undefined;
 
                 let isEditIntent = toolCallDetected.action === 'edit';
-                // Fallback heuristic: If the prompt contains strong editing verbs, assume it's an edit
                 if (!isEditIntent && toolCallDetected.prompt) {
                     const p = toolCallDetected.prompt.toLowerCase();
                     if (p.includes('edit') || p.includes('change') || p.includes('modify') || p.includes('修改') || p.includes('换成') || p.includes('加上') || p.includes('去掉') || p.includes('把')) {
@@ -406,14 +359,10 @@ export function useChatStream({
                     }
                 }
 
-                if (isEditIntent) {
-                    if (!imagesToSend) {
-                        // Find the most recent message in the chat history that had an image,
-                        // regardless of whether it was uploaded by the user or generated by the assistant.
-                        const lastMsgWithImages = [...messages].reverse().find(m => m.images && m.images.length > 0);
-                        if (lastMsgWithImages && lastMsgWithImages.images) {
-                            imagesToSend = lastMsgWithImages.images;
-                        }
+                if (isEditIntent && !imagesToSend) {
+                    const lastMsgWithImages = [...messagesToSend].reverse().find(m => m.images && m.images.length > 0);
+                    if (lastMsgWithImages && lastMsgWithImages.images) {
+                        imagesToSend = lastMsgWithImages.images;
                     }
                 }
 
@@ -430,10 +379,7 @@ export function useChatStream({
 
                 if (!imgResponse.ok) {
                     setIsImageGenerating(false);
-                    if (imgResponse.status === 401) {
-                        handleUnauthorized();
-                        return;
-                    }
+                    if (imgResponse.status === 401) { handleUnauthorized(); return; }
                     if (imgResponse.status === 429) {
                         throw new Error('图片生成请求过于频繁，请稍后再试（每分钟最多 5 次）');
                     }
@@ -446,8 +392,6 @@ export function useChatStream({
 
                 const imgTextParts = imgData.parts?.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n') || '';
                 const imgImageParts = imgData.parts?.filter((p: any) => p.type === 'image') || [];
-
-                // Combine any streamed text with image results
                 const combinedText = [streamedContent, imgTextParts].filter(Boolean).join('\n');
 
                 const imgAssistantMessage: ChatMessage = {
@@ -458,12 +402,11 @@ export function useChatStream({
                     thinking: thinkingContent,
                 };
 
-                const finalMessages = [...newMessages, imgAssistantMessage];
+                const finalMessages = [...messagesToSend, imgAssistantMessage];
                 setMessages(finalMessages);
                 await saveMessages(finalMessages);
             } else {
-                // Save final text-only messages
-                const finalMessages = [...newMessages];
+                const finalMessages = [...messagesToSend];
                 const finalAssistant: ChatMessage = {
                     id: assistantMessage.id,
                     role: "assistant",
@@ -477,7 +420,7 @@ export function useChatStream({
             if (err.name !== "AbortError") {
                 setError(err);
             }
-            await saveMessages(newMessages);
+            await saveMessages(messagesToSend);
         } finally {
             setIsLoading(false);
             setIsThinking(false);
@@ -485,13 +428,86 @@ export function useChatStream({
             setThinkingText("");
             abortControllerRef.current = null;
 
-            // Broadcast a custom event so Tasks/Calendar views know a chat just finished
-            // and might have inserted new data in the background.
             if (typeof window !== 'undefined') {
                 window.dispatchEvent(new Event('chat_response_completed'));
             }
         }
-    }, [messages, pendingImages, isLoading, getAuthHeaders, handleUnauthorized, model, systemInstruction, setMessages, saveMessages]);
+    }, [model, systemInstruction, getAuthHeaders, handleUnauthorized, saveMessages, setMessages]);
+
+    // Send message
+    const sendMessage = useCallback(async (text: string, userHasScrolledUp: React.MutableRefObject<boolean>) => {
+        if ((!text.trim() && pendingImages.length === 0) || isLoading) return;
+        setIsLoading(true);
+        setIsThinking(true);
+        setThinkingText("");
+        setError(null);
+        setDebugEvents([]);
+        userHasScrolledUp.current = false;
+
+        const currentImages = [...pendingImages];
+        setPendingImages([]);
+
+        const userMessage: ChatMessage = {
+            id: Date.now().toString(),
+            role: "user",
+            parts: [{ type: "text", text }],
+            images: currentImages.length > 0 ? currentImages : undefined,
+        };
+
+        const newMessages = [...messages, userMessage];
+        setMessages(newMessages);
+
+        await runStream(newMessages, currentImages);
+    }, [messages, pendingImages, isLoading, runStream, setMessages]);
+
+    // Edit a user message and resend from that point
+    const editAndResend = useCallback(async (messageId: string, newText: string) => {
+        if (isLoading) return;
+        const idx = messages.findIndex(m => m.id === messageId);
+        if (idx === -1 || messages[idx].role !== 'user') return;
+
+        setIsLoading(true);
+        setIsThinking(true);
+        setThinkingText("");
+        setError(null);
+        setDebugEvents([]);
+
+        const originalMsg = messages[idx];
+        const editedMessage: ChatMessage = {
+            id: Date.now().toString(),
+            role: "user",
+            parts: [{ type: "text", text: newText }],
+            images: originalMsg.images,
+        };
+
+        // Keep history before this message + the edited message
+        const newMessages = [...messages.slice(0, idx), editedMessage];
+        setMessages(newMessages);
+
+        await runStream(newMessages, originalMsg.images || []);
+    }, [messages, isLoading, runStream, setMessages]);
+
+    // Regenerate from a specific assistant message
+    const regenerateFrom = useCallback(async (messageId: string) => {
+        if (isLoading) return;
+        const idx = messages.findIndex(m => m.id === messageId);
+        if (idx === -1 || messages[idx].role !== 'assistant') return;
+
+        // Truncate to just before this assistant message
+        const truncated = messages.slice(0, idx);
+        if (truncated.length === 0 || truncated[truncated.length - 1].role !== 'user') return;
+
+        setIsLoading(true);
+        setIsThinking(true);
+        setThinkingText("");
+        setError(null);
+        setDebugEvents([]);
+
+        setMessages(truncated);
+
+        const lastUserMsg = truncated[truncated.length - 1];
+        await runStream(truncated, lastUserMsg.images || []);
+    }, [messages, isLoading, runStream, setMessages]);
 
     return {
         isLoading,
@@ -506,6 +522,8 @@ export function useChatStream({
         handleImageUpload,
         sendMessage,
         stopGeneration,
+        editAndResend,
+        regenerateFrom,
         debugEvents,
     };
 }

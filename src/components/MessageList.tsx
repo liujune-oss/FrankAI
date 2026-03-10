@@ -13,6 +13,8 @@ interface MessageListProps {
     isImageGenerating?: boolean;
     thinkingText: string;
     error: Error | null;
+    onEditMessage?: (id: string, newText: string) => void;
+    onRegenerateMessage?: (id: string) => void;
 }
 
 export default function MessageList({
@@ -22,11 +24,18 @@ export default function MessageList({
     isImageGenerating,
     thinkingText,
     error,
+    onEditMessage,
+    onRegenerateMessage,
 }: MessageListProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const userHasScrolledUp = useRef(false);
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+    // Edit state
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editText, setEditText] = useState("");
+    const editTextareaRef = useRef<HTMLTextAreaElement>(null);
 
     const handleDownload = useCallback(() => {
         if (!lightboxSrc) return;
@@ -38,13 +47,27 @@ export default function MessageList({
         document.body.removeChild(a);
     }, [lightboxSrc]);
 
-    // Close lightbox on ESC
+    // Close lightbox on ESC, cancel edit on ESC
     useEffect(() => {
-        if (!lightboxSrc) return;
-        const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxSrc(null); };
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setLightboxSrc(null);
+                setEditingId(null);
+            }
+        };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [lightboxSrc]);
+    }, []);
+
+    // Auto-focus textarea when edit starts
+    useEffect(() => {
+        if (editingId && editTextareaRef.current) {
+            editTextareaRef.current.focus();
+            // Place cursor at end
+            const len = editTextareaRef.current.value.length;
+            editTextareaRef.current.setSelectionRange(len, len);
+        }
+    }, [editingId]);
 
     const scrollToBottom = useCallback(() => {
         if (!userHasScrolledUp.current) {
@@ -71,6 +94,26 @@ export default function MessageList({
         }
     }, [isLoading]);
 
+    // Cancel edit if loading starts (e.g. another action)
+    useEffect(() => {
+        if (isLoading && editingId) {
+            setEditingId(null);
+        }
+    }, [isLoading, editingId]);
+
+    const startEdit = (msg: ChatMessage) => {
+        const text = msg.parts.filter(p => p.type === 'text').map(p => p.text).join('\n');
+        setEditText(text);
+        setEditingId(msg.id);
+    };
+
+    const confirmEdit = (id: string) => {
+        if (editText.trim() && onEditMessage) {
+            onEditMessage(id, editText.trim());
+        }
+        setEditingId(null);
+    };
+
     return (
         <div ref={chatContainerRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 bg-background/50 overscroll-y-contain">
             {messages.length === 0 ? (
@@ -93,8 +136,10 @@ export default function MessageList({
                     // Filter out the internal text placeholder used for image payloads
                     content = content.replace(/\[Generated \d+ image\(s\)\]\n?/g, "");
 
+                    const isEditing = editingId === m.id;
+
                     return (
-                        <div key={m.id} className="space-y-2">
+                        <div key={m.id} className="group space-y-1">
                             {m.role === "assistant" && m.thinking && (
                                 <div className="flex w-full justify-start">
                                     <details className="max-w-[85%]">
@@ -127,74 +172,134 @@ export default function MessageList({
                                     </div>
                                 </div>
                             )}
+
+                            {/* Message bubble */}
                             <div className={`flex w-full ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                                <div
-                                    className={`flex flex-col max-w-[85%] rounded-2xl px-4 py-2 text-[15px] leading-relaxed break-words ${m.role === "user"
-                                        ? "bg-primary text-primary-foreground rounded-tr-sm"
-                                        : "bg-muted text-foreground rounded-tl-sm border"
-                                        }`}
-                                >
-                                    {m.role === "assistant" ? (
-                                        <div className="prose prose-sm dark:prose-invert prose-p:leading-relaxed max-w-none prose-pre:p-0 prose-pre:bg-transparent">
-                                            <ReactMarkdown
-                                                remarkPlugins={[remarkGfm]}
-                                                rehypePlugins={[rehypeHighlight]}
-                                                components={{
-                                                    pre: ({ children }) => (
-                                                        <pre className="rounded-xl overflow-x-auto text-[13px] my-2">{children}</pre>
-                                                    ),
-                                                    code: ({ className, children, ...props }) => {
-                                                        const isBlock = className?.startsWith('language-');
-                                                        return isBlock ? (
-                                                            <code className={`${className ?? ''} block px-4 py-3`} {...props}>{children}</code>
-                                                        ) : (
-                                                            <code className="bg-muted px-1 py-0.5 rounded text-[13px] font-mono" {...props}>{children}</code>
-                                                        );
-                                                    },
-                                                }}
+                                {isEditing && m.role === "user" ? (
+                                    /* Inline edit UI */
+                                    <div className="flex flex-col gap-2 max-w-[85%] w-full">
+                                        <textarea
+                                            ref={editTextareaRef}
+                                            value={editText}
+                                            onChange={e => setEditText(e.target.value)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                                                    e.preventDefault();
+                                                    confirmEdit(m.id);
+                                                }
+                                                if (e.key === 'Escape') setEditingId(null);
+                                            }}
+                                            className="w-full rounded-2xl rounded-tr-sm px-4 py-2 text-[15px] leading-relaxed bg-primary text-primary-foreground resize-none min-h-[60px] outline-none focus:ring-2 focus:ring-primary/50"
+                                            rows={Math.max(2, editText.split('\n').length)}
+                                        />
+                                        <div className="flex gap-2 justify-end">
+                                            <button
+                                                onClick={() => setEditingId(null)}
+                                                className="px-3 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
                                             >
-                                                {content}
-                                            </ReactMarkdown>
+                                                取消
+                                            </button>
+                                            <button
+                                                onClick={() => confirmEdit(m.id)}
+                                                disabled={!editText.trim()}
+                                                className="px-3 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                发送
+                                            </button>
                                         </div>
-                                    ) : (
-                                        content
-                                    )}
-                                    {/* Final Image Rendering */}
-                                    {m.images && m.images.length > 0 && (
-                                        <div className="mt-2 space-y-2">
-                                            <div className="flex flex-wrap gap-2">
-                                                {m.images.map((img, idx) => {
-                                                    const src = `data:${img.mimeType};base64,${img.data}`;
-                                                    return (
-                                                        <img
-                                                            key={idx}
-                                                            src={src}
-                                                            alt="Generated Image"
-                                                            onClick={() => setLightboxSrc(src)}
-                                                            className="rounded-xl w-[85%] sm:w-[320px] aspect-square object-cover shadow-sm border cursor-pointer hover:opacity-95 hover:shadow-md transition-all"
-                                                        />
-                                                    );
-                                                })}
+                                    </div>
+                                ) : (
+                                    <div
+                                        className={`flex flex-col max-w-[85%] rounded-2xl px-4 py-2 text-[15px] leading-relaxed break-words ${m.role === "user"
+                                            ? "bg-primary text-primary-foreground rounded-tr-sm"
+                                            : "bg-muted text-foreground rounded-tl-sm border"
+                                            }`}
+                                    >
+                                        {m.role === "assistant" ? (
+                                            <div className="prose prose-sm dark:prose-invert prose-p:leading-relaxed max-w-none prose-pre:p-0 prose-pre:bg-transparent">
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkGfm]}
+                                                    rehypePlugins={[rehypeHighlight]}
+                                                    components={{
+                                                        pre: ({ children }) => (
+                                                            <pre className="rounded-xl overflow-x-auto text-[13px] my-2">{children}</pre>
+                                                        ),
+                                                        code: ({ className, children, ...props }) => {
+                                                            const isBlock = className?.startsWith('language-');
+                                                            return isBlock ? (
+                                                                <code className={`${className ?? ''} block px-4 py-3`} {...props}>{children}</code>
+                                                            ) : (
+                                                                <code className="bg-muted px-1 py-0.5 rounded text-[13px] font-mono" {...props}>{children}</code>
+                                                            );
+                                                        },
+                                                    }}
+                                                >
+                                                    {content}
+                                                </ReactMarkdown>
                                             </div>
-                                        </div>
-                                    )}
-                                </div>
+                                        ) : (
+                                            content
+                                        )}
+                                        {/* Final Image Rendering */}
+                                        {m.images && m.images.length > 0 && (
+                                            <div className="mt-2 space-y-2">
+                                                <div className="flex flex-wrap gap-2">
+                                                    {m.images.map((img, idx) => {
+                                                        const src = `data:${img.mimeType};base64,${img.data}`;
+                                                        return (
+                                                            <img
+                                                                key={idx}
+                                                                src={src}
+                                                                alt="Generated Image"
+                                                                onClick={() => setLightboxSrc(src)}
+                                                                className="rounded-xl w-[85%] sm:w-[320px] aspect-square object-cover shadow-sm border cursor-pointer hover:opacity-95 hover:shadow-md transition-all"
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Action buttons below each message */}
+                            {!isEditing && !isLoading && (
+                                <div className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                                        {m.role === "user" && onEditMessage && (
+                                            <button
+                                                onClick={() => startEdit(m)}
+                                                title="编辑消息"
+                                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                                编辑
+                                            </button>
+                                        )}
+                                        {m.role === "assistant" && onRegenerateMessage && (
+                                            <button
+                                                onClick={() => onRegenerateMessage(m.id)}
+                                                title="重新生成"
+                                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-4.25" /></svg>
+                                                重新生成
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     );
                 })
             )}
 
-
-
             {/* Image Generating Skeleton */}
             {isImageGenerating && (
                 <div className="flex w-full justify-start mt-4 mb-2">
                     <div className="w-[85%] sm:w-[320px] aspect-square rounded-2xl overflow-hidden relative shadow-sm border border-border/50 bg-muted/30">
-                        {/* Shimmer Background */}
                         <div className="absolute inset-0 bg-gradient-to-tr from-muted/20 via-muted-foreground/10 to-muted/20 animate-pulse" />
-
-                        {/* Center Icon */}
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40">
                             <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="animate-pulse mb-3">
                                 <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
@@ -256,7 +361,6 @@ export default function MessageList({
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
                     onClick={() => setLightboxSrc(null)}
                 >
-                    {/* Toolbar */}
                     <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
                         <button
                             onClick={(e) => { e.stopPropagation(); handleDownload(); }}
@@ -272,7 +376,6 @@ export default function MessageList({
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                         </button>
                     </div>
-                    {/* Image */}
                     <img
                         src={lightboxSrc}
                         alt="preview"
