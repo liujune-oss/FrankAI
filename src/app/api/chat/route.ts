@@ -63,9 +63,17 @@ interface MemoryChunk {
     created_at: string;
 }
 
+interface GetActivitiesArgs {
+    start_date?: string;
+    end_date?: string;
+    type?: string;
+    status?: string;
+    limit?: number;
+}
+
 interface ToolExecutionResult {
     toolName: string;
-    args: UpsertActivityArgs;
+    args: UpsertActivityArgs | GetActivitiesArgs;
     result: string;
 }
 
@@ -94,7 +102,69 @@ const UPSERT_ACTIVITY_DECLARATION = {
     },
 };
 
-// 鈹€鈹€鈹€ Execute upsert_activity locally 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+const GET_ACTIVITIES_DECLARATION = {
+    name: 'get_activities',
+    description: '查询用户在指定时间范围内的活动记录（tasks、events、reminders、logs 等）。当用户要求"总结本周工作"、"生成周报"、"查看本月日程"、"我这周做了什么"时，调用此工具获取数据后再生成结构化简报。',
+    parameters: {
+        type: 'object',
+        properties: {
+            start_date: { type: 'string', description: '开始日期，格式 YYYY-MM-DD，例如 "2026-03-04"（本周一）。' },
+            end_date: { type: 'string', description: '结束日期（含当天），格式 YYYY-MM-DD，例如 "2026-03-10"（本周日）。' },
+            type: { type: 'string', description: '按类型过滤：event、task、reminder、log、milestone。不填返回全部类型。' },
+            status: { type: 'string', description: '按状态过滤：pending、in_progress、completed。不填返回全部状态。' },
+            limit: { type: 'number', description: '最多返回条数，默认 100。' },
+        },
+        required: [],
+    },
+};
+
+// ─── Execute get_activities locally ──────────────────────────────────────────
+async function executeGetActivities(args: GetActivitiesArgs, userId: string): Promise<string> {
+    appendLog(`[get_activities] TOOL CALLED. args: ${JSON.stringify(args)}`);
+    if (!supabaseAdmin) {
+        return 'Error: Database connection not configured.';
+    }
+    try {
+        let query = supabaseAdmin
+            .from('activities')
+            .select('id, title, description, type, status, start_time, end_time, is_all_day, priority, location, tags, created_at, updated_at')
+            .eq('user_id', userId)
+            .order('start_time', { ascending: true });
+
+        if (args.start_date) {
+            query = query.gte('start_time', args.start_date);
+        }
+        if (args.end_date) {
+            // Include the full end day by using < next day
+            const endNext = new Date(args.end_date);
+            endNext.setDate(endNext.getDate() + 1);
+            query = query.lt('start_time', endNext.toISOString().slice(0, 10));
+        }
+        if (args.type) {
+            query = query.eq('type', args.type);
+        }
+        if (args.status) {
+            query = query.eq('status', args.status);
+        }
+        query = query.limit(args.limit || 100);
+
+        const { data, error } = await query;
+        if (error) {
+            appendLog(`[get_activities] ERROR: ${JSON.stringify(error)}`);
+            return `Error querying activities: ${error.message}`;
+        }
+        if (!data || data.length === 0) {
+            return JSON.stringify({ count: 0, activities: [], message: '该时间范围内没有活动记录。' });
+        }
+        appendLog(`[get_activities] Found ${data.length} activities`);
+        return JSON.stringify({ count: data.length, activities: data });
+    } catch (error: any) {
+        appendLog(`[get_activities] CATCH EXCEPTION: ${error.message || error}`);
+        return `Error: ${error.message}`;
+    }
+}
+
+// ─── Execute upsert_activity locally ─────────────────────────────────────────
 async function executeUpsertActivity(args: UpsertActivityArgs, userId: string): Promise<string> {
     appendLog(`[upsert_activity] TOOL CALLED. args: ${JSON.stringify(args)}`);
     if (!supabaseAdmin) {
@@ -279,6 +349,7 @@ export async function POST(req: Request) {
             '- Count carefully: the number of upsert_activity calls must equal the number of NEW items in the CURRENT request only.\n' +
             '- After all tool calls complete, confirm ONLY what was created in this turn.';
         finalSystemInstruction += '\n\n[Time Zone] All timestamps MUST be in UTC (Z suffix). Shanghai is UTC+8, so 8 PM local = 12:00Z.';
+        finalSystemInstruction += '\n\n[周报/简报工具] 当用户要求"总结本周工作"、"生成周报"、"我这周做了什么"等时：\n1. 先调用 get_activities 工具，传入本周的 start_date（周一）和 end_date（今天或周日）\n2. 拿到数据后，整理成结构化简报，按类型分组（事件/任务/日志等），列出完成情况\n3. 不要凭空捏造活动内容，必须基于工具返回的真实数据生成报告';
 
         // Convert messages to Google AI format
         const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || '' });
@@ -352,12 +423,13 @@ export async function POST(req: Request) {
                             contents: allContents,
                             config: {
                                 systemInstruction: finalSystemInstruction,
-                                tools: [{ functionDeclarations: [UPSERT_ACTIVITY_DECLARATION] }] as any,
+                                tools: [{ functionDeclarations: [UPSERT_ACTIVITY_DECLARATION, GET_ACTIVITIES_DECLARATION] }] as any,
                             },
                         });
 
                         let toolCalls: any[] = [];
                         let hasText = false;
+                        let modelParts: any[] = [];
 
                         for await (const chunk of await result) {
                             const candidate = chunk.candidates?.[0];
@@ -365,8 +437,9 @@ export async function POST(req: Request) {
 
                             for (const part of candidate.content?.parts || []) {
                                 if (part.text) {
-                                    // Only stream text directly if NO tools have been executed yet.
-                                    // After tool execution, we use isolated confirmation (see Phase 2 below).
+                                    modelParts.push({ text: part.text });
+                                    // Only stream text directly if NO write-tools have been executed yet.
+                                    // After write-tool execution, Phase 2 handles confirmation.
                                     if (!anyToolsExecuted) {
                                         if (!hasText) { send({ type: 'text-start', id: '0' }); hasText = true; }
                                         send({ type: 'text-delta', id: '0', delta: part.text });
@@ -374,6 +447,7 @@ export async function POST(req: Request) {
                                     }
                                 } else if (part.functionCall) {
                                     const fc = part.functionCall;
+                                    modelParts.push({ functionCall: fc });
                                     send({ type: 'tool-call', toolCallId: fc.name + '_' + step, toolName: fc.name, args: fc.args });
                                     toolCalls.push(fc);
                                 }
@@ -390,15 +464,19 @@ export async function POST(req: Request) {
 
                         send({ type: 'finish-step', finishReason: 'tool-calls' });
 
-                        // Execute tools
+                        // Execute tools — track whether any write tools were called
+                        let hasWriteTools = false;
                         const funcResponseParts: any[] = [];
                         for (const toolCall of toolCalls) {
                             let toolResult = 'Tool executed.';
                             if (toolCall.name === 'upsert_activity') {
+                                hasWriteTools = true;
                                 toolResult = await executeUpsertActivity(toolCall.args as UpsertActivityArgs, authPayload.uid);
+                            } else if (toolCall.name === 'get_activities') {
+                                toolResult = await executeGetActivities(toolCall.args as GetActivitiesArgs, authPayload.uid);
                             }
                             send({ type: 'tool-result', toolCallId: toolCall.name + '_' + step, toolName: toolCall.name, result: toolResult });
-                            allExecutedResults.push({ toolName: toolCall.name, args: toolCall.args as UpsertActivityArgs, result: toolResult });
+                            allExecutedResults.push({ toolName: toolCall.name, args: toolCall.args, result: toolResult });
 
                             let parsedResult: unknown = null;
                             try { parsedResult = JSON.parse(toolResult); } catch { }
@@ -410,11 +488,17 @@ export async function POST(req: Request) {
                             });
                         }
 
-                        anyToolsExecuted = true;
-                        // Break immediately after tool execution — Phase 2 handles confirmation.
-                        // Without this, the loop feeds function responses back to the model,
-                        // causing it to call upsert_activity again (duplicate entries).
-                        break;
+                        if (hasWriteTools) {
+                            // Write-tool path: break and let Phase 2 generate confirmation.
+                            // This prevents duplicate upsert_activity calls.
+                            anyToolsExecuted = true;
+                            break;
+                        }
+
+                        // Read-only tool path (e.g. get_activities): feed results back so the
+                        // model can synthesize a report. Do NOT use Phase 2 for this case.
+                        allContents.push({ role: 'model', parts: modelParts });
+                        allContents.push({ role: 'user', parts: funcResponseParts });
                     }
 
                     // Phase 2: Isolated confirmation (only when tools were run)
