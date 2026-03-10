@@ -436,7 +436,12 @@ export async function POST(req: Request) {
                             if (!candidate) continue;
 
                             for (const part of candidate.content?.parts || []) {
-                                if (part.text) {
+                                if ((part as any).thought) {
+                                    // Preserve thought/reasoning parts as-is (including thought_signature).
+                                    // These MUST be kept in history for the model to accept functionResponse.
+                                    // Do NOT stream thought content to the client.
+                                    modelParts.push(part);
+                                } else if (part.text) {
                                     modelParts.push({ text: part.text });
                                     // Only stream text directly if NO write-tools have been executed yet.
                                     // After write-tool execution, Phase 2 handles confirmation.
