@@ -436,13 +436,14 @@ export async function POST(req: Request) {
                             if (!candidate) continue;
 
                             for (const part of candidate.content?.parts || []) {
-                                if ((part as any).thought || (part as any).thoughtSignature) {
-                                    // Preserve thought/reasoning parts AND thoughtSignature-only parts as-is.
-                                    // Google streaming sends thought content as { thought: true, text: "..." }
-                                    // and then a separate signature part as { thoughtSignature: "base64..." }.
-                                    // BOTH must be kept in history for functionResponse to be accepted.
-                                    // Do NOT stream thought content to the client.
+                                if ((part as any).thoughtSignature) {
+                                    // Keep ONLY the thoughtSignature part in history.
+                                    // Google docs: history needs { thoughtSignature: "..." } + { functionCall }
+                                    // The verbose thought text is internal reasoning — NOT included in history.
                                     modelParts.push(part);
+                                } else if ((part as any).thought) {
+                                    // Verbose thought text: skip from history (internal reasoning only).
+                                    // Do NOT stream to client either.
                                 } else if (part.text) {
                                     modelParts.push({ text: part.text });
                                     // Only stream text directly if NO write-tools have been executed yet.
