@@ -436,9 +436,11 @@ export async function POST(req: Request) {
                             if (!candidate) continue;
 
                             for (const part of candidate.content?.parts || []) {
-                                if ((part as any).thought) {
-                                    // Preserve thought/reasoning parts as-is (including thought_signature).
-                                    // These MUST be kept in history for the model to accept functionResponse.
+                                if ((part as any).thought || (part as any).thoughtSignature) {
+                                    // Preserve thought/reasoning parts AND thoughtSignature-only parts as-is.
+                                    // Google streaming sends thought content as { thought: true, text: "..." }
+                                    // and then a separate signature part as { thoughtSignature: "base64..." }.
+                                    // BOTH must be kept in history for functionResponse to be accepted.
                                     // Do NOT stream thought content to the client.
                                     modelParts.push(part);
                                 } else if (part.text) {
