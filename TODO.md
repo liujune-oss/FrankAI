@@ -2,7 +2,7 @@
 
 > 只放"现在要做的事"，完成后移入 BACKLOG.md 的已完成区。
 > 更多待办见 `BACKLOG.md`，版本规划见 `docs/roadmap.md`。
-> 当前版本：v1.8.130
+> 当前版本：v1.8.134
 
 ---
 
@@ -20,6 +20,8 @@
 
 ## ✅ 最近完成
 
+- v1.8.134：修复 thought_signature 400 错误（保留思考部分至历史，get_activities 工具循环正常）
+- v1.8.132：新增 get_activities 工具，支持周报/简报生成
 - v1.8.131：消息编辑/重新生成（B08）— 悬停显示编辑/重新生成按钮，内联编辑 UI
 - v1.8.130：cron 提醒加 user_id 过滤，admin 新增提醒用户选择
 - v1.8.129：cron 提醒改为通知所有活动类型（移除 type=reminder 过滤）
