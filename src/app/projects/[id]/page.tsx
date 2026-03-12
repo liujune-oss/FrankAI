@@ -387,18 +387,18 @@ export default function ProjectDetailPage() {
                     <input
                         type="date"
                         value={project.due_date ? new Date(project.due_date).toISOString().split('T')[0] : ''}
-                        onChange={e => {
+                        onChange={async e => {
                             const date = e.target.value ? new Date(e.target.value).toISOString() : null;
-                            if (date) updateProject(id, { due_date: date });
-                            else updateProject(id, { due_date: undefined });
+                            const updated = await updateProject(id, { due_date: date ?? null });
+                            if (updated) setProject(updated);
                         }}
                         className="bg-zinc-800 text-zinc-300 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-white/20"
                     />
                     {project.due_date && (
                         <button
                             onClick={async () => {
-                                const updated = await updateProject(id, { due_date: undefined });
-                                // due_date 设为 undefined 不会更新，需要用 null
+                                const updated = await updateProject(id, { due_date: null });
+                                if (updated) setProject(updated);
                             }}
                             className="text-xs text-zinc-500 hover:text-red-400 transition-colors"
                         >

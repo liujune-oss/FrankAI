@@ -99,7 +99,7 @@ export function useProjects() {
         return data.project as Project;
     };
 
-    const updateProject = async (id: string, payload: Partial<Project>) => {
+    const updateProject = async (id: string, payload: Omit<Partial<Project>, 'due_date'> & { due_date?: string | null }) => {
         const res = await fetch(`/api/projects/${id}`, {
             method: 'PUT',
             headers: { ...auth.getAuthHeaders(), 'Content-Type': 'application/json' },
