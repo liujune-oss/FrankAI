@@ -187,7 +187,7 @@ export default function ProjectsPage() {
                         const priority = (p.priority || 'medium') as ProjectPriority;
                         const priorityCfg = PRIORITY_COLORS[priority];
                         return (
-                            <Link key={p.id} href={`/projects/${p.id}`}>
+                            <Link key={p.id} href={`/projects/${p.id}`} className="block">
                                 <div className="flex items-center gap-3 p-4 rounded-xl bg-zinc-900 border border-white/5 hover:bg-zinc-800/60 transition-colors">
                                     <div className="w-3 h-10 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
                                     <div className="flex-1 min-w-0">
