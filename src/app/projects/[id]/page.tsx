@@ -104,6 +104,10 @@ export default function ProjectDetailPage() {
     // Delete project dialog
     const [showDeleteProject, setShowDeleteProject] = useState(false);
 
+    // Color picker popover
+    const [showColorPicker, setShowColorPicker] = useState(false);
+    const colorPickerRef = useRef<HTMLDivElement>(null);
+
     // View mode
     const [viewMode, setViewMode] = useState<'grouped' | 'timeline'>('grouped');
 
@@ -137,6 +141,16 @@ export default function ProjectDetailPage() {
     }, [auth.isActivated, auth.getAuthHeaders, id, router]);
 
     useEffect(() => { if (auth.isActivated) loadData(); }, [auth.isActivated, loadData]);
+
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as Node)) {
+                setShowColorPicker(false);
+            }
+        };
+        if (showColorPicker) document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [showColorPicker]);
 
     const handleStatusChange = async (status: Project['status']) => {
         if (!project) return;
@@ -372,18 +386,32 @@ export default function ProjectDetailPage() {
                         </button>
                     ))}
                 </div>
+                {/* Color picker + Due date (same row) */}
                 <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex gap-1.5">
-                        {PROJECT_COLORS.map(c => (
-                            <button key={c} onClick={() => handleColorChange(c)}
-                                className={`w-5 h-5 rounded-full transition-transform ${project.color === c ? 'scale-125 ring-2 ring-white/40' : ''}`}
-                                style={{ backgroundColor: c }} />
-                        ))}
+                    {/* Compact color picker */}
+                    <div ref={colorPickerRef} className="relative">
+                        <button
+                            onClick={() => setShowColorPicker(p => !p)}
+                            className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-white/5 transition-colors"
+                            title="选择颜色"
+                        >
+                            <div className="w-3.5 h-3.5 rounded-full ring-1 ring-white/20" style={{ backgroundColor: project.color }} />
+                            <span className="text-[11px] text-zinc-500">颜色</span>
+                        </button>
+                        {showColorPicker && (
+                            <div className="absolute top-full left-0 mt-1.5 p-2 bg-zinc-800 border border-white/10 rounded-xl shadow-xl z-20 flex gap-1.5 flex-wrap w-[136px]">
+                                {PROJECT_COLORS.map(c => (
+                                    <button key={c} onClick={() => { handleColorChange(c); setShowColorPicker(false); }}
+                                        className={`w-5 h-5 rounded-full transition-transform hover:scale-110 ${project.color === c ? 'scale-125 ring-2 ring-white/40' : ''}`}
+                                        style={{ backgroundColor: c }} />
+                                ))}
+                            </div>
+                        )}
                     </div>
-                </div>
-                {/* Due date editor */}
-                <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-zinc-500">截止日期</span>
+                    {/* Divider */}
+                    <div className="w-px h-3.5 bg-white/10 flex-shrink-0" />
+                    {/* Due date */}
+                    <span className="text-[11px] text-zinc-500">截止</span>
                     <input
                         type="date"
                         value={project.due_date ? new Date(project.due_date).toISOString().split('T')[0] : ''}
