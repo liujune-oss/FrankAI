@@ -25,7 +25,6 @@ const PRIORITY_OPTIONS = [
     { value: 'low',    label: '低',   color: 'text-zinc-400' },
     { value: 'medium', label: '中',   color: 'text-blue-400' },
     { value: 'high',   label: '高',   color: 'text-orange-400' },
-    { value: 'urgent', label: '紧急', color: 'text-red-400' },
 ] as const;
 
 // Convert ISO UTC string → datetime-local input value (local time)

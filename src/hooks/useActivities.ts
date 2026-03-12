@@ -15,7 +15,7 @@ export interface Activity {
     description?: string;
     type: 'task' | 'event' | 'reminder' | 'log' | 'milestone';
     status: 'needs_action' | 'in_process' | 'completed' | 'cancelled';
-    priority: 'low' | 'medium' | 'high' | 'urgent';
+    priority: 'low' | 'medium' | 'high';
     start_time?: string;
     end_time?: string;
     is_all_day: boolean;

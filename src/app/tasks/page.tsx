@@ -501,7 +501,7 @@ export default function TasksPage() {
                         const subtasks = activity.subtasks || [];
                         const subtaskDone = subtasks.filter(s => s.completed).length;
                         // 高优先级样式
-                        const isHighPriority = !isCompleted && (activity.priority === 'high' || activity.priority === 'urgent');
+                        const isHighPriority = !isCompleted && activity.priority === 'high';
 
                         return (
                             <div key={activity.id} onClick={() => router.push(`/activities/${activity.id}`)} className={`w-full flex items-center p-4 gap-3 rounded-xl border cursor-pointer ${bgClass} ${isHighPriority && !overdue ? 'border-l-[3px] border-l-red-400' : ''}`}>
@@ -521,7 +521,7 @@ export default function TasksPage() {
                                 <div className="flex flex-col gap-1 w-full min-w-0">
                                     <div className="flex items-center gap-1.5 min-w-0">
                                         {isHighPriority && (
-                                            <ArrowUp size={14} className={activity.priority === 'urgent' ? 'text-red-400 flex-shrink-0' : 'text-orange-400 flex-shrink-0'} />
+                                            <ArrowUp size={14} className="text-orange-400 flex-shrink-0" />
                                         )}
                                         <span className={`text-[15px] font-medium truncate ${isCompleted ? 'text-zinc-500 line-through' : (activity.type === 'task' ? 'text-emerald-100' : activity.type === 'event' ? 'text-blue-100' : activity.type === 'log' ? 'text-purple-100' : 'text-pink-100')}`}>
                                             {activity.title}
@@ -576,8 +576,8 @@ export default function TasksPage() {
                     );
 
                     const getRefTime = (a: Activity) => a.start_time || a.end_time || a.created_at;
-                    // 优先级权重：urgent > high > medium > low
-                    const PRIORITY_WEIGHT: Record<string, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
+                    // 优先级权重：high > medium > low
+                    const PRIORITY_WEIGHT: Record<string, number> = { high: 3, medium: 2, low: 1 };
                     const sortByPriorityThenTime = (arr: Activity[]) => [...arr].sort((a, b) => {
                         const pa = PRIORITY_WEIGHT[a.priority] ?? 2;
                         const pb = PRIORITY_WEIGHT[b.priority] ?? 2;

@@ -31,7 +31,7 @@ export const UPSERT_ACTIVITY_DECLARATION = {
             start_time: { type: 'string', description: 'Local time in ISO 8601 format WITHOUT timezone suffix, e.g. "2026-03-09T14:00:00" for 2pm. Do NOT convert to UTC.' },
             end_time: { type: 'string', description: 'Local end time in ISO 8601 format WITHOUT timezone suffix, e.g. "2026-03-09T15:00:00". Do NOT convert to UTC.' },
             is_all_day: { type: 'boolean', description: 'True if the event lasts the entire day.' },
-            priority: { type: 'string', description: 'low, medium, high, or urgent. Default: medium.' },
+            priority: { type: 'string', description: 'low, medium, or high. Default: medium.' },
             location: { type: 'string', description: 'Physical location or virtual link.' },
             id: { type: 'string', description: 'UUID of existing activity to update. Omit when creating new.' },
             tags: { type: 'array', items: { type: 'string' }, description: 'Semantic tags you freely infer from the activity content. Always provide at least 1-3 tags. Examples: ["工作", "会议"], ["健身", "习惯"], ["项目A", "紧急"].' },
@@ -67,6 +67,8 @@ export async function executeUpsertActivity(args: UpsertActivityArgs, userId: st
         delete payload.activity_type;
         if (payload.summary && !payload.title) { payload.title = payload.summary; }
         delete payload.summary;
+        // DB constraint only allows low/medium/high — map legacy 'urgent' to 'high'
+        if (payload.priority === 'urgent') payload.priority = 'high';
         if (!payload.title || typeof payload.title !== 'string' || payload.title.trim() === '') payload.title = 'Untitled Activity';
         if (!payload.type) payload.type = (payload.start_time && payload.end_time) ? 'event' : 'task';
 
