@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.activities (
     -- Combined Type & Status
     type TEXT CHECK (type IN ('task', 'event', 'reminder', 'log')) NOT NULL DEFAULT 'task',
     status TEXT CHECK (status IN ('needs_action', 'in_process', 'completed', 'cancelled')) DEFAULT 'needs_action',
-    priority TEXT CHECK (priority IN ('low', 'medium', 'high', 'urgent')) DEFAULT 'medium',
+    priority TEXT CHECK (priority IN ('high', 'medium', 'low')) DEFAULT 'medium',
     
     -- Temporal Data
     -- A task has a due date (end_time), no start_time.

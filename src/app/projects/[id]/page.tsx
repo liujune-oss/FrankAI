@@ -305,6 +305,24 @@ export default function ProjectDetailPage() {
 
             {/* Project meta */}
             <div className="flex-none px-4 py-3 border-b border-white/5 space-y-3">
+                {/* Progress bar */}
+                {activities.length > 0 && (
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-zinc-400">进度</span>
+                            <span className="text-[11px] text-zinc-400">{completedCount}/{activities.length} 完成</span>
+                        </div>
+                        <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                            <div
+                                className="h-full rounded-full transition-all duration-300"
+                                style={{
+                                    width: `${(completedCount / activities.length) * 100}%`,
+                                    backgroundColor: project.color,
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
                 <div className="flex items-center gap-2 flex-wrap">
                     {(Object.keys(STATUS_LABELS) as Project['status'][]).map(s => (
                         <button key={s} onClick={() => handleStatusChange(s)}
@@ -323,9 +341,6 @@ export default function ProjectDetailPage() {
                     </div>
                     {project.due_date && (
                         <span className="text-xs text-zinc-500">截止 {new Date(project.due_date).toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-                    )}
-                    {activities.length > 0 && (
-                        <span className="text-xs text-zinc-500">{completedCount}/{activities.length} 已完成</span>
                     )}
                 </div>
             </div>

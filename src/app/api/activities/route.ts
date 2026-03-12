@@ -60,7 +60,15 @@ export async function GET(req: Request) {
 
         if (error) throw error;
 
-        return NextResponse.json({ activities: data });
+        // Sort by priority: high > medium > low
+        const priorityOrder = { high: 0, medium: 1, low: 2 };
+        const sortedData = (data || []).sort((a, b) => {
+            const pa = priorityOrder[a.priority as keyof typeof priorityOrder] ?? 1;
+            const pb = priorityOrder[b.priority as keyof typeof priorityOrder] ?? 1;
+            return pa - pb;
+        });
+
+        return NextResponse.json({ activities: sortedData });
     } catch (error: any) {
         console.error('Failed to fetch activities:', error);
         return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

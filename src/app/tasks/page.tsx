@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import ConversationDrawer from "@/components/ConversationDrawer";
 import { getAllConversations, getActiveConversationId, setActiveConversationId, Conversation } from "@/lib/conversations";
-import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, FileText, Loader2, Copy, X as XIcon, AlertTriangle, ChevronDown, ChevronRight, LayoutList, Clock, List, Flag } from "lucide-react";
+import { CheckSquare, Square, Mic, Calendar as CalendarIcon, Bell, FileText, Loader2, Copy, X as XIcon, AlertTriangle, ChevronDown, ChevronRight, LayoutList, Clock, List, Flag, ArrowUp } from "lucide-react";
 import { useActivities, Activity } from "@/hooks/useActivities";
 
 export default function TasksPage() {
@@ -497,8 +497,14 @@ export default function TasksPage() {
                             bgClass = "bg-zinc-500/10 border-white/5 opacity-50";
                         }
 
+                        // 子任务进度
+                        const subtasks = activity.subtasks || [];
+                        const subtaskDone = subtasks.filter(s => s.completed).length;
+                        // 高优先级样式
+                        const isHighPriority = !isCompleted && (activity.priority === 'high' || activity.priority === 'urgent');
+
                         return (
-                            <div key={activity.id} onClick={() => router.push(`/activities/${activity.id}`)} className={`w-full flex items-center p-4 gap-3 rounded-xl border cursor-pointer ${bgClass}`}>
+                            <div key={activity.id} onClick={() => router.push(`/activities/${activity.id}`)} className={`w-full flex items-center p-4 gap-3 rounded-xl border cursor-pointer ${bgClass} ${isHighPriority && !overdue ? 'border-l-[3px] border-l-red-400' : ''}`}>
                                 <div className="flex-shrink-0">
                                     {activity.type === 'log' ? (
                                         <div className="w-5 h-5 flex items-center justify-center pt-0.5"><FileText size={18} className="text-purple-500/50" /></div>
@@ -513,9 +519,14 @@ export default function TasksPage() {
                                     )}
                                 </div>
                                 <div className="flex flex-col gap-1 w-full min-w-0">
-                                    <span className={`text-[15px] font-medium truncate ${isCompleted ? 'text-zinc-500 line-through' : (activity.type === 'task' ? 'text-emerald-100' : activity.type === 'event' ? 'text-blue-100' : activity.type === 'log' ? 'text-purple-100' : 'text-pink-100')}`}>
-                                        {activity.title}
-                                    </span>
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        {isHighPriority && (
+                                            <ArrowUp size={14} className={activity.priority === 'urgent' ? 'text-red-400 flex-shrink-0' : 'text-orange-400 flex-shrink-0'} />
+                                        )}
+                                        <span className={`text-[15px] font-medium truncate ${isCompleted ? 'text-zinc-500 line-through' : (activity.type === 'task' ? 'text-emerald-100' : activity.type === 'event' ? 'text-blue-100' : activity.type === 'log' ? 'text-purple-100' : 'text-pink-100')}`}>
+                                            {activity.title}
+                                        </span>
+                                    </div>
                                     <div className="flex items-center gap-2 flex-wrap">
                                         {(activity.start_time || activity.end_time) && (
                                             <span className={`text-[13px] ${isCompleted ? 'text-zinc-500' : (activity.type === 'task' ? 'text-emerald-400/80' : activity.type === 'event' ? 'text-blue-400/80' : 'text-pink-400/80')}`}>
@@ -532,7 +543,20 @@ export default function TasksPage() {
                                                 <AlertTriangle size={10} />已过期
                                             </span>
                                         )}
+                                        {subtasks.length > 0 && (
+                                            <span className="text-[11px] text-zinc-500">
+                                                {subtaskDone}/{subtasks.length} 子任务
+                                            </span>
+                                        )}
                                     </div>
+                                    {subtasks.length > 0 && (
+                                        <div className="h-1 bg-zinc-700/60 rounded-full overflow-hidden mt-0.5">
+                                            <div
+                                                className="h-full rounded-full transition-all bg-indigo-500/70"
+                                                style={{ width: `${subtaskDone / subtasks.length * 100}%` }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                 <button
                                     onClick={(e) => handleCardMicToggle(activity.id, e)}
@@ -552,7 +576,15 @@ export default function TasksPage() {
                     );
 
                     const getRefTime = (a: Activity) => a.start_time || a.end_time || a.created_at;
-                    const sortByTime = (arr: Activity[]) => [...arr].sort((a, b) => new Date(getRefTime(a)).getTime() - new Date(getRefTime(b)).getTime());
+                    // 优先级权重：urgent > high > medium > low
+                    const PRIORITY_WEIGHT: Record<string, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
+                    const sortByPriorityThenTime = (arr: Activity[]) => [...arr].sort((a, b) => {
+                        const pa = PRIORITY_WEIGHT[a.priority] ?? 2;
+                        const pb = PRIORITY_WEIGHT[b.priority] ?? 2;
+                        if (pa !== pb) return pb - pa;
+                        return new Date(getRefTime(a)).getTime() - new Date(getRefTime(b)).getTime();
+                    });
+                    const sortByTime = (arr: Activity[]) => sortByPriorityThenTime(arr);
 
                     const GROUP_LABELS: Record<string, string> = { task: '待办', event: '日程', reminder: '提醒', log: '随手记', milestone: '里程碑' };
                     const GROUP_ORDER = ['task', 'event', 'reminder', 'milestone', 'log'];

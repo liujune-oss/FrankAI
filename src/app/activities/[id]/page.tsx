@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { Activity } from "@/hooks/useActivities";
-import { ArrowLeft, Pencil, Check, X, Trash2, Loader2, MapPin, Tag, Calendar, AlignLeft, Mic } from "lucide-react";
+import { Activity, Subtask } from "@/hooks/useActivities";
+import { ArrowLeft, Pencil, Check, X, Trash2, Loader2, MapPin, Tag, Calendar, AlignLeft, Mic, Plus, Circle, CheckCircle2 } from "lucide-react";
 
 const TYPE_OPTIONS = [
     { value: 'task',      label: '待办',   color: 'text-emerald-400', bg: 'bg-emerald-500/15' },
@@ -72,6 +72,10 @@ export default function ActivityDetailPage() {
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+
+    // Subtask state
+    const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+    const [isAddingSubtask, setIsAddingSubtask] = useState(false);
 
     useEffect(() => {
         if (!auth.isActivated) return;
@@ -195,6 +199,73 @@ export default function ActivityDetailPage() {
             router.back();
         }
     };
+
+    // ── Subtask handlers ─────────────────────────────────────────────────────
+    const handleAddSubtask = async () => {
+        if (!newSubtaskTitle.trim() || !activity) return;
+        const newSubtask: Subtask = {
+            id: crypto.randomUUID(),
+            title: newSubtaskTitle.trim(),
+            completed: false,
+        };
+        const updatedSubtasks = [...(activity.subtasks || []), newSubtask];
+        const res = await fetch('/api/activities', {
+            method: 'PUT',
+            headers: { ...auth.getAuthHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, subtasks: updatedSubtasks }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            setActivity(data.activity);
+            patchCache(id, data.activity);
+            setNewSubtaskTitle('');
+            setIsAddingSubtask(false);
+        }
+    };
+
+    const handleToggleSubtask = async (subtaskId: string) => {
+        if (!activity) return;
+        const updatedSubtasks = (activity.subtasks || []).map(st =>
+            st.id === subtaskId ? { ...st, completed: !st.completed } : st
+        );
+        // 全部子任务完成 → 父任务自动标为已完成；有未完成 → 恢复 needs_action（若当前已完成）
+        const allDone = updatedSubtasks.length > 0 && updatedSubtasks.every(s => s.completed);
+        const newStatus = allDone ? 'completed'
+            : (activity.status === 'completed' ? 'needs_action' : activity.status);
+        const res = await fetch('/api/activities', {
+            method: 'PUT',
+            headers: { ...auth.getAuthHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, subtasks: updatedSubtasks, status: newStatus }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            setActivity(data.activity);
+            setDraft(data.activity);
+            patchCache(id, data.activity);
+        }
+    };
+
+    const handleDeleteSubtask = async (subtaskId: string) => {
+        if (!activity) return;
+        const updatedSubtasks = (activity.subtasks || []).filter(st => st.id !== subtaskId);
+        const res = await fetch('/api/activities', {
+            method: 'PUT',
+            headers: { ...auth.getAuthHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, subtasks: updatedSubtasks }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            setActivity(data.activity);
+            patchCache(id, data.activity);
+        }
+    };
+
+    // Calculate subtask progress
+    const subtaskProgress = (() => {
+        if (!activity?.subtasks?.length) return null;
+        const completed = activity.subtasks.filter(st => st.completed).length;
+        return { completed, total: activity.subtasks.length };
+    })();
 
     if (!auth.isActivated || isLoading) {
         return (
@@ -345,6 +416,57 @@ export default function ActivityDetailPage() {
                             />
                         </div>
 
+                        {/* Subtasks (edit mode) */}
+                        <div>
+                            <p className="text-[11px] text-zinc-500 mb-2 font-medium uppercase tracking-wide">子任务</p>
+                            <div className="space-y-1.5 mb-2">
+                                {(draft.subtasks || []).map(st => (
+                                    <div key={st.id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800">
+                                        <button onClick={() => setDraft(d => ({ ...d, subtasks: (d.subtasks || []).map(s => s.id === st.id ? { ...s, completed: !s.completed } : s) }))} className="flex-shrink-0">
+                                            {st.completed
+                                                ? <CheckCircle2 size={16} className="text-emerald-400" />
+                                                : <Circle size={16} className="text-zinc-500" />}
+                                        </button>
+                                        <span className={`text-sm flex-1 ${st.completed ? 'line-through text-zinc-500' : 'text-zinc-300'}`}>{st.title}</span>
+                                        <button onClick={() => setDraft(d => ({ ...d, subtasks: (d.subtasks || []).filter(s => s.id !== st.id) }))} className="text-zinc-600 hover:text-red-400 transition-colors flex-shrink-0">
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex gap-2">
+                                <input
+                                    value={newSubtaskTitle}
+                                    onChange={e => setNewSubtaskTitle(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            const title = newSubtaskTitle.trim();
+                                            if (!title) return;
+                                            const newSt: Subtask = { id: crypto.randomUUID(), title, completed: false };
+                                            setDraft(d => ({ ...d, subtasks: [...(d.subtasks || []), newSt] }));
+                                            setNewSubtaskTitle('');
+                                        }
+                                    }}
+                                    placeholder="添加子任务（回车确认）"
+                                    className="flex-1 bg-zinc-800 text-zinc-100 placeholder:text-zinc-500 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-white/20"
+                                />
+                                <button
+                                    onClick={() => {
+                                        const title = newSubtaskTitle.trim();
+                                        if (!title) return;
+                                        const newSt: Subtask = { id: crypto.randomUUID(), title, completed: false };
+                                        setDraft(d => ({ ...d, subtasks: [...(d.subtasks || []), newSt] }));
+                                        setNewSubtaskTitle('');
+                                    }}
+                                    disabled={!newSubtaskTitle.trim()}
+                                    className="px-3 py-2 bg-zinc-700 text-zinc-300 rounded-xl text-sm hover:bg-zinc-600 transition-colors disabled:opacity-40 flex-shrink-0"
+                                >
+                                    <Plus size={16} />
+                                </button>
+                            </div>
+                        </div>
+
                         {/* Start time */}
                         <div>
                             <p className="text-[11px] text-zinc-500 mb-2 font-medium uppercase tracking-wide">开始时间</p>
@@ -455,6 +577,79 @@ export default function ActivityDetailPage() {
                                 </div>
                             </div>
                         )}
+
+                        {/* Subtasks */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wide">子任务</p>
+                                {subtaskProgress && (
+                                    <span className="text-[11px] text-zinc-400">{subtaskProgress.completed}/{subtaskProgress.total}</span>
+                                )}
+                            </div>
+                            {/* Progress bar */}
+                            {subtaskProgress && (
+                                <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-emerald-500 transition-all duration-300"
+                                        style={{ width: `${(subtaskProgress.completed / subtaskProgress.total) * 100}%` }}
+                                    />
+                                </div>
+                            )}
+                            {/* Subtask list */}
+                            <div className="space-y-1">
+                                {(activity.subtasks || []).map(st => (
+                                    <div key={st.id} className="flex items-center gap-2 group">
+                                        <button
+                                            onClick={() => handleToggleSubtask(st.id)}
+                                            className="flex-shrink-0"
+                                        >
+                                            {st.completed
+                                                ? <CheckCircle2 size={16} className="text-emerald-400" />
+                                                : <Circle size={16} className="text-zinc-500" />
+                                            }
+                                        </button>
+                                        <span className={`flex-1 text-sm ${st.completed ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
+                                            {st.title}
+                                        </span>
+                                        <button
+                                            onClick={() => handleDeleteSubtask(st.id)}
+                                            className="p-1 text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                            {/* Add subtask input */}
+                            {isAddingSubtask ? (
+                                <div className="flex items-center gap-2 mt-2">
+                                    <input
+                                        autoFocus
+                                        value={newSubtaskTitle}
+                                        onChange={e => setNewSubtaskTitle(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') handleAddSubtask();
+                                            if (e.key === 'Escape') { setIsAddingSubtask(false); setNewSubtaskTitle(''); }
+                                        }}
+                                        placeholder="子任务名称"
+                                        className="flex-1 bg-zinc-800 text-zinc-100 placeholder:text-zinc-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-white/20"
+                                    />
+                                    <button onClick={handleAddSubtask} className="p-2 text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors">
+                                        <Check size={16} />
+                                    </button>
+                                    <button onClick={() => { setIsAddingSubtask(false); setNewSubtaskTitle(''); }} className="p-2 text-zinc-500 hover:bg-zinc-800 rounded-lg transition-colors">
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setIsAddingSubtask(true)}
+                                    className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors mt-1"
+                                >
+                                    <Plus size={14} />添加子任务
+                                </button>
+                            )}
+                        </div>
 
                         {/* Meta */}
                         <div className="pt-3 border-t border-white/5 text-[11px] text-zinc-600 space-y-1">

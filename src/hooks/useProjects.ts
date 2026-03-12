@@ -3,6 +3,11 @@
 import { useState, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 
+export interface ActivityStats {
+    total: number;
+    completed: number;
+}
+
 export interface Project {
     id: string;
     title: string;
@@ -12,6 +17,7 @@ export interface Project {
     color: string;
     created_at: string;
     updated_at: string;
+    activity_stats?: ActivityStats;
 }
 
 export const PROJECT_COLORS = [

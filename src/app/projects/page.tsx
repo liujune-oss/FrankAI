@@ -18,6 +18,30 @@ export default function ProjectsPage() {
     const [activeId, setActiveId] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);
 
+    // 从 activities_cache 计算各项目进度
+    const [projectStats, setProjectStats] = useState<Record<string, { total: number; completed: number }>>({});
+
+    useEffect(() => {
+        const compute = () => {
+            try {
+                const raw = localStorage.getItem('activities_cache');
+                if (!raw) return;
+                const acts: Array<{ project_id?: string; status?: string }> = JSON.parse(raw);
+                const stats: Record<string, { total: number; completed: number }> = {};
+                for (const a of acts) {
+                    if (!a.project_id) continue;
+                    if (!stats[a.project_id]) stats[a.project_id] = { total: 0, completed: 0 };
+                    stats[a.project_id].total++;
+                    if (a.status === 'completed') stats[a.project_id].completed++;
+                }
+                setProjectStats(stats);
+            } catch { }
+        };
+        compute();
+        window.addEventListener('activities_cache_updated', compute);
+        return () => window.removeEventListener('activities_cache_updated', compute);
+    }, []);
+
     // New project form
     const [showForm, setShowForm] = useState(false);
     const [formTitle, setFormTitle] = useState('');
@@ -160,35 +184,56 @@ export default function ProjectsPage() {
                         暂无项目，点击右上角 + 新建
                     </div>
                 ) : (
-                    projects.map(p => (
-                        <div key={p.id} className="relative">
-                            <Link href={`/projects/${p.id}`}>
-                                <div className="flex items-center gap-3 p-4 rounded-xl bg-zinc-900 border border-white/5 hover:bg-zinc-800/60 transition-colors">
-                                    <div className="w-3 h-10 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-[15px] font-medium text-zinc-100 truncate">{p.title}</p>
-                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/5 text-zinc-400">
-                                                {STATUS_LABELS[p.status]}
-                                            </span>
-                                            {p.due_date && (
-                                                <span className="text-[11px] text-zinc-500">
-                                                    截止 {new Date(p.due_date).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
+                    projects.map(p => {
+                        const stats = projectStats[p.id] || { total: 0, completed: 0 };
+                        const progress = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
+                        return (
+                            <div key={p.id} className="relative">
+                                <Link href={`/projects/${p.id}`}>
+                                    <div className="flex items-center gap-3 p-4 rounded-xl bg-zinc-900 border border-white/5 hover:bg-zinc-800/60 transition-colors">
+                                        <div className="w-3 h-10 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[15px] font-medium text-zinc-100 truncate">{p.title}</p>
+                                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/5 text-zinc-400">
+                                                    {STATUS_LABELS[p.status]}
                                                 </span>
+                                                {p.due_date && (
+                                                    <span className="text-[11px] text-zinc-500">
+                                                        截止 {new Date(p.due_date).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {/* Progress bar */}
+                                            {stats.total > 0 && (
+                                                <div className="mt-2">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-[10px] text-zinc-500">{stats.completed}/{stats.total} 完成</span>
+                                                    </div>
+                                                    <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full rounded-full transition-all duration-300"
+                                                            style={{
+                                                                width: `${progress}%`,
+                                                                backgroundColor: p.color,
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
                                             )}
                                         </div>
+                                        <ChevronRight size={16} className="text-zinc-600 flex-shrink-0" />
                                     </div>
-                                    <ChevronRight size={16} className="text-zinc-600 flex-shrink-0" />
-                                </div>
-                            </Link>
-                            <button
-                                onClick={() => setDeleteId(p.id)}
-                                className="absolute top-3 right-8 p-1.5 text-zinc-600 hover:text-red-400 transition-colors"
-                            >
-                                <Trash2 size={15} />
-                            </button>
-                        </div>
-                    ))
+                                </Link>
+                                <button
+                                    onClick={() => setDeleteId(p.id)}
+                                    className="absolute top-3 right-8 p-1.5 text-zinc-600 hover:text-red-400 transition-colors"
+                                >
+                                    <Trash2 size={15} />
+                                </button>
+                            </div>
+                        );
+                    })
                 )}
             </div>
 

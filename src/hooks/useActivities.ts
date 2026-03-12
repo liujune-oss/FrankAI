@@ -3,6 +3,12 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 
+export interface Subtask {
+    id: string;
+    title: string;
+    completed: boolean;
+}
+
 export interface Activity {
     id: string;
     title: string;
@@ -16,6 +22,7 @@ export interface Activity {
     location?: string;
     tags: string[];
     project_id?: string;
+    subtasks?: Subtask[];
     created_at: string;
     updated_at: string;
 }
