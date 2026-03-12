@@ -380,8 +380,30 @@ export default function ProjectDetailPage() {
                                 style={{ backgroundColor: c }} />
                         ))}
                     </div>
+                </div>
+                {/* Due date editor */}
+                <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-zinc-500">截止日期</span>
+                    <input
+                        type="date"
+                        value={project.due_date ? new Date(project.due_date).toISOString().split('T')[0] : ''}
+                        onChange={e => {
+                            const date = e.target.value ? new Date(e.target.value).toISOString() : null;
+                            if (date) updateProject(id, { due_date: date });
+                            else updateProject(id, { due_date: undefined });
+                        }}
+                        className="bg-zinc-800 text-zinc-300 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-white/20"
+                    />
                     {project.due_date && (
-                        <span className="text-xs text-zinc-500">截止 {new Date(project.due_date).toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                        <button
+                            onClick={async () => {
+                                const updated = await updateProject(id, { due_date: undefined });
+                                // due_date 设为 undefined 不会更新，需要用 null
+                            }}
+                            className="text-xs text-zinc-500 hover:text-red-400 transition-colors"
+                        >
+                            清除
+                        </button>
                     )}
                 </div>
             </div>
