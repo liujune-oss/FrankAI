@@ -8,17 +8,32 @@ export interface ActivityStats {
     completed: number;
 }
 
+export type ProjectPriority = 'low' | 'medium' | 'high';
+
 export interface Project {
     id: string;
     title: string;
     description?: string;
     status: 'planning' | 'in_progress' | 'completed' | 'on_hold';
+    priority?: ProjectPriority;
     due_date?: string;
     color: string;
     created_at: string;
     updated_at: string;
     activity_stats?: ActivityStats;
 }
+
+export const PRIORITY_LABELS: Record<ProjectPriority, string> = {
+    low: '低',
+    medium: '中',
+    high: '高',
+};
+
+export const PRIORITY_COLORS: Record<ProjectPriority, { bg: string; text: string; border: string }> = {
+    low: { bg: 'bg-zinc-500/20', text: 'text-zinc-400', border: 'border-zinc-500/30' },
+    medium: { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
+    high: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+};
 
 export const PROJECT_COLORS = [
     '#6366f1', '#10b981', '#0ea5e9', '#f59e0b',

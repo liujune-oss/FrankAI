@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
         title: body.title?.trim() || 'Untitled Project',
         description: body.description || null,
         status: body.status || 'planning',
+        priority: body.priority || 'medium',
         due_date: body.due_date || null,
         color: body.color || '#6366f1',
     };

@@ -22,7 +22,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!auth?.uid) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const allowed = ['title', 'description', 'status', 'due_date', 'color'];
+    const allowed = ['title', 'description', 'status', 'priority', 'due_date', 'color'];
     const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
     for (const key of allowed) {
         if (key in body) payload[key] = body[key];

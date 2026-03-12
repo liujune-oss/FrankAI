@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { useProjects, Project, PROJECT_COLORS, STATUS_LABELS } from "@/hooks/useProjects";
+import { useProjects, Project, PROJECT_COLORS, STATUS_LABELS, PRIORITY_LABELS, PRIORITY_COLORS, ProjectPriority } from "@/hooks/useProjects";
 import ConversationDrawer from "@/components/ConversationDrawer";
 import { getAllConversations, getActiveConversationId, setActiveConversationId, Conversation } from "@/lib/conversations";
-import { Plus, Trash2, ChevronRight, Loader2, Mic, Copy, X as XIcon } from "lucide-react";
+import { Plus, ChevronRight, Loader2, Mic, Copy, X as XIcon } from "lucide-react";
 import Link from "next/link";
 
 export default function ProjectsPage() {
@@ -49,9 +49,6 @@ export default function ProjectsPage() {
     const [formDueDate, setFormDueDate] = useState('');
     const [formColor, setFormColor] = useState(PROJECT_COLORS[0]);
     const [isSaving, setIsSaving] = useState(false);
-
-    // Delete dialog
-    const [deleteId, setDeleteId] = useState<string | null>(null);
 
     // Voice recording
     const [isRecording, setIsRecording] = useState(false);
@@ -187,51 +184,50 @@ export default function ProjectsPage() {
                     projects.map(p => {
                         const stats = projectStats[p.id] || { total: 0, completed: 0 };
                         const progress = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
+                        const priority = (p.priority || 'medium') as ProjectPriority;
+                        const priorityCfg = PRIORITY_COLORS[priority];
                         return (
-                            <div key={p.id} className="relative">
-                                <Link href={`/projects/${p.id}`}>
-                                    <div className="flex items-center gap-3 p-4 rounded-xl bg-zinc-900 border border-white/5 hover:bg-zinc-800/60 transition-colors">
-                                        <div className="w-3 h-10 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
-                                        <div className="flex-1 min-w-0">
+                            <Link key={p.id} href={`/projects/${p.id}`}>
+                                <div className="flex items-center gap-3 p-4 rounded-xl bg-zinc-900 border border-white/5 hover:bg-zinc-800/60 transition-colors">
+                                    <div className="w-3 h-10 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
                                             <p className="text-[15px] font-medium text-zinc-100 truncate">{p.title}</p>
-                                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/5 text-zinc-400">
-                                                    {STATUS_LABELS[p.status]}
-                                                </span>
-                                                {p.due_date && (
-                                                    <span className="text-[11px] text-zinc-500">
-                                                        截止 {new Date(p.due_date).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            {/* Progress bar */}
-                                            {stats.total > 0 && (
-                                                <div className="mt-2">
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className="text-[10px] text-zinc-500">{stats.completed}/{stats.total} 完成</span>
-                                                    </div>
-                                                    <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full rounded-full transition-all duration-300"
-                                                            style={{
-                                                                width: `${progress}%`,
-                                                                backgroundColor: p.color,
-                                                            }}
-                                                        />
-                                                    </div>
-                                                </div>
+                                            {priority === 'high' && (
+                                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${priorityCfg.bg} ${priorityCfg.text}`}>高</span>
                                             )}
                                         </div>
-                                        <ChevronRight size={16} className="text-zinc-600 flex-shrink-0" />
+                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/5 text-zinc-400">
+                                                {STATUS_LABELS[p.status]}
+                                            </span>
+                                            {p.due_date && (
+                                                <span className="text-[11px] text-zinc-500">
+                                                    截止 {new Date(p.due_date).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {/* Progress bar */}
+                                        {stats.total > 0 && (
+                                            <div className="mt-2">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-[10px] text-zinc-500">{stats.completed}/{stats.total} 完成</span>
+                                                </div>
+                                                <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full rounded-full transition-all duration-300"
+                                                        style={{
+                                                            width: `${progress}%`,
+                                                            backgroundColor: p.color,
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                </Link>
-                                <button
-                                    onClick={() => setDeleteId(p.id)}
-                                    className="absolute top-3 right-8 p-1.5 text-zinc-600 hover:text-red-400 transition-colors"
-                                >
-                                    <Trash2 size={15} />
-                                </button>
-                            </div>
+                                    <ChevronRight size={16} className="text-zinc-600 flex-shrink-0" />
+                                </div>
+                            </Link>
                         );
                     })
                 )}
@@ -325,23 +321,6 @@ export default function ProjectsPage() {
                             </div>
                         </div>
                         <pre className="px-4 pb-4 text-xs text-zinc-300 font-mono whitespace-pre-wrap leading-relaxed">{voiceLog}</pre>
-                    </div>
-                </div>
-            )}
-
-            {/* Delete confirm */}
-            {deleteId && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm">
-                        <h3 className="text-base font-semibold text-zinc-100 mb-2">确认删除</h3>
-                        <p className="text-sm text-zinc-400 mb-6">删除项目后，关联的子任务不会被删除，但会解除关联。</p>
-                        <div className="flex gap-3 justify-end">
-                            <button onClick={() => setDeleteId(null)} className="px-4 py-2 rounded-xl text-sm text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition-colors">取消</button>
-                            <button
-                                onClick={async () => { await deleteProject(deleteId); setDeleteId(null); }}
-                                className="px-4 py-2 rounded-xl text-sm text-white bg-red-500/80 hover:bg-red-500 transition-colors"
-                            >确认删除</button>
-                        </div>
                     </div>
                 </div>
             )}

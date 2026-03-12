@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { useProjects, Project, PROJECT_COLORS, STATUS_LABELS } from "@/hooks/useProjects";
+import { useProjects, Project, PROJECT_COLORS, STATUS_LABELS, PRIORITY_LABELS, PRIORITY_COLORS, ProjectPriority } from "@/hooks/useProjects";
 import { Activity } from "@/hooks/useActivities";
 import { ArrowLeft, Plus, Trash2, CheckSquare, Square, Loader2, Pencil, Check, X, Mic, Copy, X as XIcon, Flag, CalendarDays, ListTodo, Bell, LayoutList, Clock } from "lucide-react";
 
@@ -101,6 +101,9 @@ export default function ProjectDetailPage() {
     // Delete dialog
     const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
 
+    // Delete project dialog
+    const [showDeleteProject, setShowDeleteProject] = useState(false);
+
     // View mode
     const [viewMode, setViewMode] = useState<'grouped' | 'timeline'>('grouped');
 
@@ -143,6 +146,16 @@ export default function ProjectDetailPage() {
     const handleColorChange = async (color: string) => {
         if (!project) return;
         setProject(await updateProject(id, { color }));
+    };
+
+    const handlePriorityChange = async (priority: ProjectPriority) => {
+        if (!project) return;
+        setProject(await updateProject(id, { priority }));
+    };
+
+    const handleDeleteProject = async () => {
+        await deleteProject(id);
+        router.push('/projects');
     };
 
     const handleTitleSave = async () => {
@@ -286,11 +299,16 @@ export default function ProjectDetailPage() {
                             <button onClick={() => setEditingTitle(false)} className="p-1 text-zinc-500"><X size={16} /></button>
                         </div>
                     ) : (
-                        <button onClick={() => { setTitleDraft(project.title); setEditingTitle(true); }} className="flex items-center gap-2 group">
-                            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
-                            <span className="text-base font-semibold truncate">{project.title}</span>
-                            <Pencil size={13} className="text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => { setTitleDraft(project.title); setEditingTitle(true); }} className="flex items-center gap-2 group">
+                                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
+                                <span className="text-base font-semibold truncate">{project.title}</span>
+                                <Pencil size={13} className="text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                            </button>
+                            {project.priority === 'high' && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">高优先</span>
+                            )}
+                        </div>
                     )}
                 </div>
                 {/* View mode toggle */}
@@ -300,6 +318,14 @@ export default function ProjectDetailPage() {
                     title={viewMode === 'grouped' ? '切换为时间线' : '切换为分组'}
                 >
                     {viewMode === 'grouped' ? <Clock size={18} /> : <LayoutList size={18} />}
+                </button>
+                {/* Delete project button */}
+                <button
+                    onClick={() => setShowDeleteProject(true)}
+                    className="p-1.5 rounded-lg hover:bg-red-500/20 transition-colors flex-shrink-0 text-zinc-500 hover:text-red-400"
+                    title="删除项目"
+                >
+                    <Trash2 size={18} />
                 </button>
             </header>
 
@@ -323,7 +349,22 @@ export default function ProjectDetailPage() {
                         </div>
                     </div>
                 )}
+                {/* Priority selector */}
                 <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-zinc-500">优先级</span>
+                    {(Object.keys(PRIORITY_LABELS) as ProjectPriority[]).map(p => {
+                        const cfg = PRIORITY_COLORS[p];
+                        return (
+                            <button key={p} onClick={() => handlePriorityChange(p)}
+                                className={`text-[11px] font-medium px-3 py-1 rounded-full transition-colors ${project.priority === p ? `${cfg.bg} ${cfg.text} ring-1 ring-current` : 'bg-white/5 text-zinc-500 hover:bg-white/10 hover:text-zinc-300'}`}>
+                                {PRIORITY_LABELS[p]}
+                            </button>
+                        );
+                    })}
+                </div>
+                {/* Status selector */}
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-zinc-500">状态</span>
                     {(Object.keys(STATUS_LABELS) as Project['status'][]).map(s => (
                         <button key={s} onClick={() => handleStatusChange(s)}
                             className={`text-[11px] font-medium px-3 py-1 rounded-full transition-colors ${project.status === s ? 'bg-white/15 text-zinc-100' : 'bg-white/5 text-zinc-500 hover:bg-white/10 hover:text-zinc-300'}`}>
@@ -472,6 +513,20 @@ export default function ProjectDetailPage() {
                         <div className="flex gap-3 justify-end">
                             <button onClick={() => setDeleteItemId(null)} className="px-4 py-2 rounded-xl text-sm text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition-colors">取消</button>
                             <button onClick={() => handleDeleteItem(deleteItemId)} className="px-4 py-2 rounded-xl text-sm text-white bg-red-500/80 hover:bg-red-500 transition-colors">删除</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete project confirm */}
+            {showDeleteProject && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm">
+                        <h3 className="text-base font-semibold text-zinc-100 mb-2">删除项目</h3>
+                        <p className="text-sm text-zinc-400 mb-6">确定要删除项目「{project?.title}」吗？关联的任务不会被删除，但会解除关联。</p>
+                        <div className="flex gap-3 justify-end">
+                            <button onClick={() => setShowDeleteProject(false)} className="px-4 py-2 rounded-xl text-sm text-zinc-300 bg-zinc-800 hover:bg-zinc-700 transition-colors">取消</button>
+                            <button onClick={handleDeleteProject} className="px-4 py-2 rounded-xl text-sm text-white bg-red-500/80 hover:bg-red-500 transition-colors">删除项目</button>
                         </div>
                     </div>
                 </div>
