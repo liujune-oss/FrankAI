@@ -29,17 +29,11 @@ function ActivityCard({ a, showTypeBadge, onToggle, onDelete, onNavigate }: {
             onClick={onNavigate}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${onNavigate ? 'cursor-pointer' : ''} ${a.status === 'completed' ? 'bg-zinc-500/10 border-white/5 opacity-50' : `${cfg.bg} ${cfg.border}`}`}
         >
-            {isMilestone ? (
-                <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
-                    <div className={`w-2.5 h-2.5 rotate-45 ${a.status === 'completed' ? 'bg-zinc-500' : 'bg-amber-400'}`} />
-                </div>
-            ) : (
-                <button onClick={e => { e.stopPropagation(); onToggle(a); }} className="flex-shrink-0">
-                    {a.status === 'completed'
-                        ? <CheckSquare size={18} className={cfg.color} />
-                        : <Square size={18} className={`${cfg.color} opacity-50`} />}
-                </button>
-            )}
+            <button onClick={e => { e.stopPropagation(); onToggle(a); }} className="flex-shrink-0">
+                {a.status === 'completed'
+                    ? <CheckSquare size={18} className={cfg.color} />
+                    : <Square size={18} className={`${cfg.color} opacity-50`} />}
+            </button>
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                     <span className={`text-[14px] font-medium ${a.status === 'completed' ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
