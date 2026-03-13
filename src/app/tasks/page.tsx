@@ -403,9 +403,9 @@ export default function TasksPage() {
                     addLog(`列表刷新完成: ${Date.now() - t3}ms`);
                     addLog(`全链路总计: ${Date.now() - t0}ms`);
                     setVoiceLog(logs.join('\n'));
-                } catch (err) {
+                } catch (err: any) {
                     console.error("Voice processing error:", err);
-                    alert("语音处理失败，请重试或检查后端的 STT 接口配置");
+                    alert(`语音处理失败：${err?.message || '未知错误'}`);
                 } finally {
                     setIsProcessingVoice(false);
                 }

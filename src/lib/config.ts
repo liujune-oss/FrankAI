@@ -13,8 +13,8 @@ const DEFAULT_CONFIGS: Record<string, any> = {
         { id: 'gemini-2.0-flash-lite', label: '2.0 Flash Lite', group: 'Gemini 2.0' },
     ],
     default_chat_model: 'gemini-3-flash-preview',
-    voice_stt_model: 'gemini-2.5-flash',
-    voice_intent_model: 'gemini-3.1-flash-lite-preview',
+    voice_stt_model: 'gemini-2.0-flash',
+    voice_intent_model: 'gemini-2.0-flash',
     memory_summary_model: 'gemini-3-flash-preview',
     voice_intent_prompt: `你是一个专业的语音转写助手。请将这段语音内容转化为准确、连贯的文字。
 要求：
