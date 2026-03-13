@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Conversation } from "@/lib/conversations";
 import versionData from "../../version.json";
-import { Beaker, CheckSquare, Calendar, FolderKanban, Settings, RefreshCw, ChevronDown, BrainCircuit, Plus, Trash2, CloudOff } from "lucide-react";
+import { Beaker, CheckSquare, Calendar, FolderKanban, Settings, RefreshCw, ChevronDown, BrainCircuit, Plus, Trash2, CloudOff, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 interface ConversationDrawerProps {
     open: boolean;
@@ -48,7 +48,58 @@ export default function ConversationDrawer({
     const [showSettings, setShowSettings] = useState(false);
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const [pendingClearCloud, setPendingClearCloud] = useState(false);
+    const [isNavigating, setIsNavigating] = useState(false);
+    const [clickedNav, setClickedNav] = useState<string | null>(null);
+    const [clickedConv, setClickedConv] = useState<string | null>(null);
     const pathname = usePathname();
+    const router = useRouter();
+
+    // Delayed close with fade effect
+    const closeWithTransition = useCallback(() => {
+        setIsNavigating(true);
+        // Close drawer after a short delay to show click feedback
+        setTimeout(() => {
+            onClose();
+            // Reset navigation state after animation
+            setTimeout(() => {
+                setIsNavigating(false);
+                setClickedNav(null);
+            }, 300);
+        }, 150);
+    }, [onClose]);
+
+    // Handle nav item click with ripple effect
+    const handleNavClick = useCallback((href: string) => {
+        setClickedNav(href);
+        closeWithTransition();
+    }, [closeWithTransition]);
+
+    // Handle conversation click with feedback
+    const handleConvClick = useCallback((conv: Conversation) => {
+        setClickedConv(conv.id);
+        setPendingDeleteId(null);
+        setIsNavigating(true);
+        setTimeout(() => {
+            onSwitch(conv);
+            onClose();
+            setTimeout(() => {
+                setIsNavigating(false);
+                setClickedConv(null);
+            }, 300);
+        }, 100);
+    }, [onSwitch, onClose]);
+
+    // Handle new conversation
+    const handleNewClick = useCallback(() => {
+        setIsNavigating(true);
+        setTimeout(() => {
+            onNew();
+            onClose();
+            setTimeout(() => {
+                setIsNavigating(false);
+            }, 300);
+        }, 100);
+    }, [onNew, onClose]);
 
     return (
         <>
@@ -57,6 +108,16 @@ export default function ConversationDrawer({
             )}
 
             <div className={`absolute top-0 left-0 h-full w-72 bg-card border-r z-40 flex flex-col transition-transform duration-300 ease-in-out ${open ? "translate-x-0" : "-translate-x-full"}`}>
+
+                {/* Loading overlay */}
+                {isNavigating && (
+                    <div className="absolute inset-0 bg-card/80 backdrop-blur-sm z-50 flex items-center justify-center transition-opacity duration-200">
+                        <div className="flex flex-col items-center gap-3">
+                            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                            <span className="text-sm text-muted-foreground">加载中...</span>
+                        </div>
+                    </div>
+                )}
 
                 {/* ── Fixed top ─────────────────────────────────────────────── */}
 
@@ -72,17 +133,22 @@ export default function ConversationDrawer({
                 <div className="flex-none grid grid-cols-3 gap-2 px-3 py-3 border-b">
                     {NAV_ITEMS.map(item => {
                         const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                        const isClicked = clickedNav === item.href;
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                onClick={onClose}
-                                className={`flex flex-col items-center gap-1.5 py-3 rounded-xl transition-all ${isActive ? `${item.activeColor} ${item.activeBg}` : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"}`}
+                                onClick={(e) => { e.preventDefault(); handleNavClick(item.href); router.push(item.href); }}
+                                className={`flex flex-col items-center gap-1.5 py-3 rounded-xl transition-all duration-200 relative overflow-hidden ${isActive ? `${item.activeColor} ${item.activeBg}` : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"} ${isClicked ? "scale-95 opacity-80" : ""}`}
                             >
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${isActive ? `${item.activeIconBg} shadow` : "bg-white/5 group-hover:bg-white/10"}`}>
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm ${isActive ? `${item.activeIconBg} shadow` : "bg-white/5 group-hover:bg-white/10"} ${isClicked ? "scale-90" : ""}`}>
                                     {item.icon}
                                 </div>
                                 <span className="text-[11px] font-medium">{item.label}</span>
+                                {/* Ripple effect on click */}
+                                {isClicked && (
+                                    <div className={`absolute inset-0 rounded-xl ${item.activeBg} animate-pulse`} />
+                                )}
                             </Link>
                         );
                     })}
@@ -92,21 +158,24 @@ export default function ConversationDrawer({
                 <div className="flex-none px-3 pt-3 pb-2">
                     <p className="text-[11px] font-semibold text-muted-foreground/60 px-1 mb-2 uppercase tracking-wide">对话</p>
                     <button
-                        onClick={onNew}
-                        className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted text-foreground text-sm font-medium hover:bg-muted/70 transition-colors"
+                        onClick={handleNewClick}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted text-foreground text-sm font-medium hover:bg-muted/70 transition-all duration-200 active:scale-95"
                     >
-                        <Plus size={15} />
+                        <Plus size={15} className="transition-transform duration-200" />
                         新建会话
                     </button>
                 </div>
 
                 {/* ── Scrollable conversation list ──────────────────────────── */}
                 <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5 min-h-0">
-                    {conversations.map(conv => (
+                    {conversations.map(conv => {
+                        const isActive = activeId === conv.id;
+                        const isClicked = clickedConv === conv.id;
+                        return (
                         <div
                             key={conv.id}
-                            className={`flex items-center rounded-xl px-3 py-2.5 cursor-pointer transition-colors ${activeId === conv.id ? "bg-foreground/10 text-foreground font-semibold" : "hover:bg-muted text-foreground"}`}
-                            onClick={() => { setPendingDeleteId(null); onSwitch(conv); }}
+                            className={`flex items-center rounded-xl px-3 py-2.5 cursor-pointer transition-all duration-200 ${isActive ? "bg-foreground/10 text-foreground font-semibold" : "hover:bg-muted text-foreground"} ${isClicked ? "scale-[0.98] bg-foreground/15" : ""}`}
+                            onClick={() => handleConvClick(conv)}
                         >
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm truncate font-medium">{conv.title}</p>
@@ -130,7 +199,8 @@ export default function ConversationDrawer({
                                 </button>
                             )}
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 {/* ── Fixed bottom ──────────────────────────────────────────── */}
@@ -148,8 +218,8 @@ export default function ConversationDrawer({
                     {isAdmin && showSettings && (
                         <div className="px-3 pb-3 space-y-1">
                             <button
-                                onClick={() => { onClose(); onOpenMemoryManager(); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-400 hover:text-blue-300 rounded-lg hover:bg-blue-500/10 transition-colors"
+                                onClick={() => { closeWithTransition(); setTimeout(onOpenMemoryManager, 200); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-400 hover:text-blue-300 rounded-lg hover:bg-blue-500/10 transition-all duration-200 active:scale-95"
                             >
                                 <BrainCircuit size={13} />记忆管理
                             </button>
@@ -164,7 +234,7 @@ export default function ConversationDrawer({
                                         window.location.reload();
                                     }
                                 }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors"
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all duration-200 active:scale-95"
                             >
                                 <RefreshCw size={13} />强制刷新缓存
                             </button>
@@ -183,14 +253,14 @@ export default function ConversationDrawer({
                             ) : (
                                 <button
                                     onClick={() => setPendingClearCloud(true)}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400/70 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors"
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400/70 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-all duration-200 active:scale-95"
                                 >
                                     <CloudOff size={13} />清空云端记录
                                 </button>
                             )}
                             <button
-                                onClick={() => { onClose(); onOpenSandbox(); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-purple-400 hover:text-purple-300 rounded-lg hover:bg-purple-500/10 transition-colors"
+                                onClick={() => { closeWithTransition(); setTimeout(onOpenSandbox, 200); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-purple-400 hover:text-purple-300 rounded-lg hover:bg-purple-500/10 transition-all duration-200 active:scale-95"
                             >
                                 <Beaker size={13} />技能靶场
                             </button>
