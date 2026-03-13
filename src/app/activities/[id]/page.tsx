@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Activity, Subtask } from "@/hooks/useActivities";
 import { ArrowLeft, Pencil, Check, X, Trash2, Loader2, MapPin, Tag, Calendar, AlignLeft, Mic, Plus, Circle, CheckCircle2 } from "lucide-react";
+import LoadingScreen from "@/components/LoadingScreen";
 
 const TYPE_OPTIONS = [
     { value: 'task',      label: '待办',   color: 'text-emerald-400', bg: 'bg-emerald-500/15' },
@@ -267,11 +268,7 @@ export default function ActivityDetailPage() {
     })();
 
     if (!auth.isActivated || isLoading) {
-        return (
-            <main className="flex items-center justify-center h-[100dvh] bg-background">
-                <Loader2 size={24} className="animate-spin text-zinc-500" />
-            </main>
-        );
+        return <LoadingScreen mode="full" text="加载详情" />;
     }
 
     if (!activity) {

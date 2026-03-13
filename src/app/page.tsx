@@ -11,6 +11,7 @@ import MessageList from "@/components/MessageList";
 import InputBar from "@/components/InputBar";
 import MemoryManager from "@/components/MemoryManager";
 import SandboxModal from "@/components/SandboxModal";
+import LoadingScreen from "@/components/LoadingScreen";
 
 const DEFAULT_MODELS = [
   { id: 'gemini-3.1-pro-preview', label: '3.1 Pro', group: 'Gemini 3.x' },
@@ -111,11 +112,7 @@ export default function ChatPage() {
 
   // ── Loading screen ──
   if (auth.checkingAuth || !conv.hasLoaded) {
-    return (
-      <div className="h-[100dvh] w-full bg-background flex items-center justify-center">
-        加载中...
-      </div>
-    );
+    return <LoadingScreen mode="skeleton" />;
   }
 
   const handleMemory = async (convId: string) => {
