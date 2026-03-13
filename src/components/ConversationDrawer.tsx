@@ -27,9 +27,9 @@ interface ConversationDrawerProps {
 }
 
 const NAV_ITEMS = [
-    { href: "/tasks",    icon: <CheckSquare size={22} />,   label: "活动",  activeColor: "text-emerald-400 bg-emerald-500/15" },
-    { href: "/calendar", icon: <Calendar size={22} />,      label: "日历",  activeColor: "text-blue-400 bg-blue-500/15" },
-    { href: "/projects", icon: <FolderKanban size={22} />,  label: "项目",  activeColor: "text-indigo-400 bg-indigo-500/15" },
+    { href: "/tasks",    icon: <CheckSquare size={20} />,   label: "活动",  activeColor: "text-emerald-400", activeBg: "bg-emerald-500/10", activeIconBg: "bg-emerald-500/25 shadow-emerald-500/20" },
+    { href: "/calendar", icon: <Calendar size={20} />,      label: "日历",  activeColor: "text-blue-400",    activeBg: "bg-blue-500/10",    activeIconBg: "bg-blue-500/25 shadow-blue-500/20" },
+    { href: "/projects", icon: <FolderKanban size={20} />,  label: "项目",  activeColor: "text-indigo-400",  activeBg: "bg-indigo-500/10",  activeIconBg: "bg-indigo-500/25 shadow-indigo-500/20" },
 ];
 
 export default function ConversationDrawer({
@@ -77,9 +77,11 @@ export default function ConversationDrawer({
                                 key={item.href}
                                 href={item.href}
                                 onClick={onClose}
-                                className={`flex flex-col items-center gap-1.5 py-3 rounded-xl transition-colors ${isActive ? item.activeColor : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"}`}
+                                className={`flex flex-col items-center gap-1.5 py-3 rounded-xl transition-all ${isActive ? `${item.activeColor} ${item.activeBg}` : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"}`}
                             >
-                                {item.icon}
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${isActive ? `${item.activeIconBg} shadow` : "bg-white/5 group-hover:bg-white/10"}`}>
+                                    {item.icon}
+                                </div>
                                 <span className="text-[11px] font-medium">{item.label}</span>
                             </Link>
                         );
