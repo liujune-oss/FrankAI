@@ -4,8 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Activity, Subtask } from "@/hooks/useActivities";
-import { ArrowLeft, Pencil, Check, X, Trash2, Loader2, MapPin, Tag, Calendar, AlignLeft, Mic, Plus, Circle, CheckCircle2 } from "lucide-react";
+import { Pencil, Check, X, Trash2, Loader2, MapPin, Tag, Calendar, AlignLeft, Mic, Plus, Circle, CheckCircle2 } from "lucide-react";
 import LoadingScreen from "@/components/LoadingScreen";
+import BackButton from "@/components/BackButton";
+import PageTransition, { staggerContainer, staggerItem } from "@/components/PageTransition";
+import { motion } from "framer-motion";
 
 const TYPE_OPTIONS = [
     { value: 'task',      label: '待办',   color: 'text-emerald-400', bg: 'bg-emerald-500/15' },
@@ -273,10 +276,12 @@ export default function ActivityDetailPage() {
 
     if (!activity) {
         return (
-            <main className="flex flex-col items-center justify-center h-[100dvh] bg-background gap-3">
-                <p className="text-zinc-500 text-sm">未找到该条目</p>
-                <button onClick={() => router.back()} className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors">返回</button>
-            </main>
+            <PageTransition>
+                <main className="flex flex-col items-center justify-center h-[100dvh] bg-background gap-3">
+                    <p className="text-zinc-500 text-sm">未找到该条目</p>
+                    <BackButton className="text-xs text-zinc-400 hover:text-zinc-200" size={16} />
+                </main>
+            </PageTransition>
         );
     }
 
@@ -286,14 +291,13 @@ export default function ActivityDetailPage() {
     const canToggleStatus = activity.type !== 'log' && activity.type !== 'milestone';
 
     return (
-        <main className="flex flex-col h-[100dvh] bg-background w-full md:max-w-4xl mx-auto shadow-sm pb-[env(safe-area-inset-bottom)] overflow-hidden">
+        <PageTransition>
+            <main className="flex flex-col h-[100dvh] bg-background w-full md:max-w-4xl mx-auto shadow-sm pb-[env(safe-area-inset-bottom)] overflow-hidden">
 
-            {/* Header */}
-            <header className="flex-none px-4 py-3 border-b border-white/5 flex items-center gap-2 bg-card">
-                <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-muted transition-colors flex-shrink-0">
-                    <ArrowLeft size={20} />
-                </button>
-                <div className="flex-1" />
+                {/* Header */}
+                <header className="flex-none px-4 py-3 border-b border-white/5 flex items-center gap-2 bg-card">
+                    <BackButton />
+                    <div className="flex-1" />
                 {isEditing ? (
                     <>
                         <button
@@ -681,6 +685,7 @@ export default function ActivityDetailPage() {
                     </div>
                 </div>
             )}
-        </main>
+            </main>
+        </PageTransition>
     );
 }

@@ -5,7 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjects, Project, PROJECT_COLORS, STATUS_LABELS, PRIORITY_LABELS, PRIORITY_COLORS, ProjectPriority } from "@/hooks/useProjects";
 import { Activity } from "@/hooks/useActivities";
-import { ArrowLeft, Plus, Trash2, CheckSquare, Square, Loader2, Pencil, Check, X, Mic, Copy, X as XIcon, Flag, CalendarDays, ListTodo, Bell, LayoutList, Clock } from "lucide-react";
+import { Plus, Trash2, CheckSquare, Square, Loader2, Pencil, Check, X, Mic, Copy, X as XIcon, Flag, CalendarDays, ListTodo, Bell, LayoutList, Clock } from "lucide-react";
+import BackButton from "@/components/BackButton";
+import PageTransition from "@/components/PageTransition";
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string; border: string }> = {
     milestone: { label: '里程碑', icon: <Flag size={14} />, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
@@ -291,12 +293,11 @@ export default function ProjectDetailPage() {
     const completedCount = activities.filter(a => a.status === 'completed').length;
 
     return (
-        <main className="flex flex-col h-[100dvh] bg-background w-full md:max-w-4xl mx-auto shadow-sm pb-[env(safe-area-inset-bottom)] relative overflow-hidden">
-            {/* Header */}
-            <header className="flex-none px-4 py-3 border-b border-white/5 flex items-center gap-3 bg-card z-10">
-                <button onClick={() => router.push('/projects')} className="p-1.5 rounded-lg hover:bg-muted transition-colors flex-shrink-0">
-                    <ArrowLeft size={20} />
-                </button>
+        <PageTransition>
+            <main className="flex flex-col h-[100dvh] bg-background w-full md:max-w-4xl mx-auto shadow-sm pb-[env(safe-area-inset-bottom)] relative overflow-hidden">
+                {/* Header */}
+                <header className="flex-none px-4 py-3 border-b border-white/5 flex items-center gap-3 bg-card z-10">
+                    <BackButton onClick={() => router.push('/projects')} />
                 <div className="flex-1 min-w-0">
                     {editingTitle ? (
                         <div className="flex items-center gap-2">
@@ -575,6 +576,7 @@ export default function ProjectDetailPage() {
                     </div>
                 </div>
             )}
-        </main>
+            </main>
+        </PageTransition>
     );
 }
